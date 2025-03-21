@@ -1,0 +1,10 @@
+name: Daily Scrape
+on:
+  schedule:
+    - cron: "0 3 * * *" # 3 AM UTC daily
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python ./scripts/extract_7days_events_urls_by_promotion.py
