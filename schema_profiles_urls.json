@@ -1,0 +1,14 @@
+{
+    "name": "Fighter URLs",
+    "baseSelector": "#content",
+    "fields": [
+        {
+        "name": "URLs",
+            "selector": ".siteSearchResults tr:not(:has(th))",
+            "type": "nested_list",
+            "fields": [
+                { "name": "url", "selector": "td > a", "type": "attribute", "attribute": "href" }
+            ]
+        }
+    ]
+}

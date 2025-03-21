@@ -1,2 +1,4 @@
 virt
 .env
+_trash/
+venv/

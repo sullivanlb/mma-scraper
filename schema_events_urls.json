@@ -1,0 +1,14 @@
+{
+    "name": "Event Details",
+    "baseSelector": "#content",
+    "fields": [
+        {
+            "name": "URLs",
+            "selector": "div.promotion",
+            "type": "nested_list",
+            "fields": [
+                { "name": "url", "selector": "a[href^=\"/fightcenter/events/\"]", "type": "attribute", "attribute": "href"}
+            ]
+        }
+    ]
+}
