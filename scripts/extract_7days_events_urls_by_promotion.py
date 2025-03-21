@@ -4,6 +4,7 @@ import os
 import re
 import hashlib
 import logging
+import traceback
 from typing import List, Dict, Optional
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
@@ -35,9 +36,9 @@ def load_schema(filename: str) -> dict:
         logger.error(f"Invalid JSON in {filename}: {e}")
         raise
 
-schema_events_urls = load_schema('schema_events_urls.json')
-schema_events = load_schema('schema_events.json')
-schema_profiles = load_schema('schema_profiles.json')
+schema_events_urls = load_schema('./schemas/schema_events_urls.json')
+schema_events = load_schema('./schemas/schema_events.json')
+schema_profiles = load_schema('./schemas/schema_profiles.json')
 
 # Configure retry policy for network operations
 RETRY_POLICY = retry(
@@ -210,10 +211,10 @@ async def insert_fighter(fighter_details: List[Dict], tapology_url: str, small_i
 
         # Insert or update fighter records
         for record_by_promotion in fighter_details[0]['Records']:
-            await insert_data("records_by_promotion", [{
+            # Compute hash for the record_by_promotion data
+            record_data = {
                 'id_fighter': new_fighter_id,
                 'promotion': record_by_promotion.get('promotion', ''),
-                'broadcast': record_by_promotion.get('broadcast', ''),
                 'from': record_by_promotion.get('from', ''),
                 'to': record_by_promotion.get('to', ''),
                 'win': sanitize_int(record_by_promotion.get('win', 0)),
@@ -228,7 +229,12 @@ async def insert_fighter(fighter_details: List[Dict], tapology_url: str, small_i
                 'loss_sub': sanitize_int(record_by_promotion.get('lossSub', 0)),
                 'loss_decision': sanitize_int(record_by_promotion.get('lossDecision', 0)),
                 'loss_dq': sanitize_int(record_by_promotion.get('lossDq', 0)),
-            }], unique_key="id_fighter")
+            }
+            record_hash = hashlib.sha256(json.dumps(record_data, sort_keys=True).encode('utf-8')).hexdigest()
+            record_data['hash'] = record_hash
+
+            # Insert or update the record_by_promotion data
+            await insert_data("records_by_promotion", [record_data], unique_key="id_fighter,promotion")
 
         return new_fighter_id
     except KeyError as e:
@@ -242,10 +248,6 @@ async def insert_fight(id_event: int, id_fighter_1: int, id_fighter_2: int, figh
     # Insert fights
     fight = sanitize_fight(fight_details)
 
-    print("### Insert Fight :")
-    print(fight)
-    print("### End Insert")
-
     fight_type = 0
     match fight.get('fight_type'):
         case "Main Event":
@@ -256,10 +258,6 @@ async def insert_fight(id_event: int, id_fighter_1: int, id_fighter_2: int, figh
             fight_type = 3
         case "Prelim":
             fight_type = 4
-
-
-
-
     new_fight_id = await insert_data("fights", [{
         'fight_type'        : fight_type,
         'id_fighter_1'      : id_fighter_1,
@@ -284,32 +282,44 @@ async def insert_data(table: str, data: List[Dict], unique_key: str = None) -> O
     """Insert or update data into Supabase with transaction support."""
     try:
         # Generate hash for the data
-        data_str = json.dumps(data, sort_keys=True)  # Convert data to a JSON string
-        data_hash = hashlib.sha256(data_str.encode('utf-8')).hexdigest()  # Encode the string before hashing
+        data_str = json.dumps(data, sort_keys=True)
+        data_hash = hashlib.sha256(data_str.encode('utf-8')).hexdigest()
 
         # Check if the data already exists in the database
         if unique_key:
-            # Use the unique key to find existing records
-            unique_value = data[0].get(unique_key)
-            if not unique_value:
-                logger.error(f"Unique key {unique_key} not found in data")
+            # Handle composite unique keys (e.g., "id_fighter,promotion")
+            unique_keys = unique_key.split(",")
+            unique_values = {key: data[0].get(key) for key in unique_keys}
+
+            # Check if all unique key fields are present in the data
+            if not all(unique_values.values()):
+                logger.error(f"Missing values for unique key fields: {[key for key, value in unique_values.items() if not value]}")
                 return False
 
-            existing_data = supabase.table(table).select("*").eq(unique_key, unique_value).execute()
+            # Query the database using all unique key fields
+            query = supabase.table(table).select("*")
+            for key, value in unique_values.items():
+                query = query.eq(key, value)
+            existing_data = query.execute()
 
             if existing_data.data:
                 # Compare hashes
                 existing_hash = existing_data.data[0].get('hash')
                 if existing_hash == data_hash:
-                    logger.info(f"Data already up-to-date in {table} with hash {data_hash}")
+                    logger.info(f"Data already up-to-date in {table}")
                     return existing_data.data[0]['id']
                 else:
                     # Update existing record
-                    logger.info(f"Updating existing record in {table} with new data")
-                    response = supabase.table(table).update({**data[0], 'hash': data_hash}).eq(unique_key, unique_value).execute()
+                    logger.info(f"Updating existing record in {table}")
+                    update_query = supabase.table(table).update({**data[0], 'hash': data_hash})
+                    for key, value in unique_values.items():
+                        update_query = update_query.eq(key, value)
+                    response = update_query.execute()
+
                     if not response.data:
-                        logger.error(f"Failed to update record in {table}")
-                        return False
+                        logger.warning("Update successful, but no data returned.")
+                        return existing_data.data[0]['id']
+
                     return response.data[0]['id']
             else:
                 # Insert new data with hash
@@ -318,6 +328,7 @@ async def insert_data(table: str, data: List[Dict], unique_key: str = None) -> O
                 response = supabase.table(table).insert(data_with_hash).execute()
 
                 if not response.data:
+                    logger.error(f"Failed to insert record in {table}")
                     return None
 
                 return response.data[0]['id']
@@ -328,13 +339,14 @@ async def insert_data(table: str, data: List[Dict], unique_key: str = None) -> O
             response = supabase.table(table).insert(data_with_hash).execute()
 
             if not response.data:
+                logger.error(f"Failed to insert record in {table}")
                 return None
 
             return response.data[0]['id']
     except Exception as e:
         logger.error(f"Database operation failed: {str(e)}")
         return False
-
+    
 async def process_event_url(event_url: str):
     """Process individual event URL with error handling."""
     try:
