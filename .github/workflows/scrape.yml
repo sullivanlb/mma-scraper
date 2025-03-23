@@ -8,15 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Print working directory
-        run: pwd
-      - name: List files
-        run: ls -la
-      - name: Check Python version
-        run: python --version
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x' # Replace with your Python version
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Run script
-        run: |
-          set -x
-          python ./scripts/extract_7days_events_urls_by_promotion.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }} # Access SUPABASE_URL secret
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }} # Access SUPABASE_KEY secret
+        run: python ./scripts/extract_7days_events_urls_by_promotion.py
