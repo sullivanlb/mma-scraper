@@ -4,7 +4,7 @@ import os
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 
-with open('schema_events.json', 'r') as file:
+with open('./schemas/schema_events.json', 'r') as file:
     schema_events = json.load(file)
     
 async def extract_event_details(url):
@@ -34,7 +34,7 @@ async def extract_event_details(url):
     return event_data
 
 async def main():
-    url = "https://www.tapology.com/fightcenter/events/124622-ufc-fight-night"
+    url = "https://www.tapology.com/fightcenter/events/122989-ufc-314"
 
     event_details = await extract_event_details(url)
 

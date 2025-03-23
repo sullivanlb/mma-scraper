@@ -45,12 +45,12 @@
                 { "name": "img_fighter_1", "selector": "[id^=\"fighterBoutImage\"]:nth-of-type(1) img", "type": "attribute", "attribute": "src"},
                 { "name": "name_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] a.link-primary-red", "type": "text"},
                 { "name": "title_fighter_1", "selector": "#fb0TitleMatchup", "type": "regex", "pattern": "(Champion|Challenger)", "transform": "strip", "default": null},
-                { "name": "result_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] div > div > span", "type": "text"},
+                { "name": "result_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] div[class*=\"bg-\"] span", "type": "text"},
                 { "name": "url_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"},
                 { "name": "img_fighter_2", "selector": "[id^=\"fighterBoutImage\"]:nth-of-type(2) img", "type": "attribute", "attribute": "src"},
                 { "name": "name_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "text"},
                 { "name": "title_fighter_2", "selector": "#fb1TitleMatchup", "type": "regex", "pattern": "(Champion|Challenger)", "transform": "strip", "default": null},
-                { "name": "result_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] div > div > span", "type": "text"},
+                { "name": "result_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] div[class*=\"bg-\"] span", "type": "text"},
                 { "name": "url_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"}
             ]
         }
