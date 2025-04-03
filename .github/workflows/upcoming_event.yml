@@ -1,0 +1,31 @@
+name: Daily Scrape
+on:
+  schedule:
+    - cron: "0 3 * * *" # 3 AM UTC daily
+  workflow_dispatch: # Allows manual triggering
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x' # Replace with your Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install
+
+      - name: Run upcoming event script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }} # Access SUPABASE_URL secret
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }} # Access SUPABASE_KEY secret
+        run: python ./scripts/insert_7_day_upcoming_events.py
