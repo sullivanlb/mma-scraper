@@ -34,7 +34,7 @@ async def extract_event_details(url):
     return event_data
 
 async def main():
-    url = "https://www.tapology.com/fightcenter/events/122989-ufc-314"
+    url = "https://www.tapology.com/fightcenter/events/120214-ufc-fight-night"
 
     event_details = await extract_event_details(url)
 

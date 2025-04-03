@@ -28,4 +28,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }} # Access SUPABASE_URL secret
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }} # Access SUPABASE_KEY secret
-        run: python ./scripts/extract_7days_events_urls_by_promotion.py
+        run: python ./scripts/insert_7_day_upcoming_events.py
