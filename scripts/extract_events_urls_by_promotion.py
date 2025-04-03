@@ -35,9 +35,9 @@ def load_schema(filename: str) -> dict:
         logger.error(f"Invalid JSON in {filename}: {e}")
         raise
 
-schema_events_urls = load_schema('schema_events_urls.json')
-schema_events = load_schema('schema_events.json')
-schema_profiles = load_schema('schema_profiles.json')
+schema_events_urls = load_schema('./schemas/schema_events_urls.json')
+schema_events = load_schema('./schemas/schema_events.json')
+schema_profiles = load_schema('./schemas/schema_profiles.json')
 
 # Configure retry policy for network operations
 RETRY_POLICY = retry(
@@ -380,31 +380,33 @@ async def extract_event_urls(base_url: str) -> List[str]:
                     logger.error("No data extracted")
                     break
 
-                extracted_urls = [urljoin(BASE_URL, u['url']) for u in data[0]["URLs"]]
-                if not extracted_urls:
-                    logger.info("No more URLs found, ending pagination")
-                    return event_urls
+                print(data)
 
-                event_urls.extend(extracted_urls)
-                logger.info(f"Page {page} contained {len(extracted_urls)} URLs")
+                # extracted_urls = [urljoin(BASE_URL, u['url']) for u in data[0]["URLs"]]
+                # if not extracted_urls:
+                #     logger.info("No more URLs found, ending pagination")
+                #     return event_urls
+
+                # event_urls.extend(extracted_urls)
+                # logger.info(f"Page {page} contained {len(extracted_urls)} URLs")
 
                 # Process events concurrently but limit concurrency
-                processing_tasks = []
-                for event_url in extracted_urls:
-                    task = asyncio.create_task(process_event_url(event_url))
-                    processing_tasks.append(task)
+                # processing_tasks = []
+                # for event_url in extracted_urls:
+                #     task = asyncio.create_task(process_event_url(event_url))
+                #     processing_tasks.append(task)
 
-                    # Limit concurrent processing to 5 at a time
-                    if len(processing_tasks) >= 5:
-                        await asyncio.gather(*processing_tasks)
-                        processing_tasks = []
+                #     # Limit concurrent processing to 5 at a time
+                #     if len(processing_tasks) >= 5:
+                #         await asyncio.gather(*processing_tasks)
+                #         processing_tasks = []
 
-                # Process any remaining tasks
-                if processing_tasks:
-                    await asyncio.gather(*processing_tasks)
+                # # Process any remaining tasks
+                # if processing_tasks:
+                #     await asyncio.gather(*processing_tasks)
 
-                page += 1
-                break  # Break out of retry loop if successful
+                # page += 1
+                # break  # Break out of retry loop if successful
 
             except Exception as e:
                 logger.error(f"Error processing page {page} (attempt {attempt+1}): {str(e)}")
