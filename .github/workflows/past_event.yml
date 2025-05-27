@@ -1,4 +1,4 @@
-name: Daily Scrape
+name: Daily Scrape (Past Event)
 on:
   schedule:
     - cron: "0 3 * * *" # 3 AM UTC daily
