@@ -3,3 +3,4 @@ virt
 _trash/
 venv/
 test.py
+test/

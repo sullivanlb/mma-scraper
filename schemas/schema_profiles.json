@@ -21,7 +21,16 @@
                 { "name": "pro_mma_record", "selector": "div strong:-soup-contains(\"Pro MMA Record:\") + span", "type": "text"},
                 { "name": "current_mma_streak", "selector": "div strong:-soup-contains(\"Current MMA Streak:\") + span", "type": "text"},
                 { "name": "affiliation", "selector": "div strong:-soup-contains(\"Affiliation:\") + span", "type": "text"},
-                { "name": "other_coaches", "selector": "div strong:-soup-contains(\"Other Coaches:\") + span", "type": "text"}
+                { "name": "other_coaches", "selector": "div strong:-soup-contains(\"Other Coaches:\") + span", "type": "text"},
+                { "name": "twitter", "selector": "strong:-soup-contains('Personal Links:') ~ div a[href^='https://www.twitter.com/'], strong:-soup-contains('Personal Links:') ~ div a[href^='https://twitter.com/']", "type":"attribute", "attribute":"href"},
+                { "name": "instagram", "selector": "strong:-soup-contains('Personal Links:') ~ div a[href^='https://instagram.com/']", "type":"attribute", "attribute":"href"},
+                { "name": "facebook", "selector": "strong:-soup-contains('Personal Links:') ~ div a[href^='https://www.facebook.com/']", "type":"attribute", "attribute":"href"},
+                { "name": "sherdog", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='https://www.sherdog.com/']", "type": "attribute", "attribute": "href"},
+                { "name": "wikipedia", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='https://en.wikipedia.org/']", "type": "attribute", "attribute": "href"},
+                { "name": "mixedmartialarts", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='https://fighters.mixedmartialarts.com/']", "type": "attribute", "attribute": "href"},
+                { "name": "ufc", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='https://www.ufc.com/']", "type": "attribute", "attribute": "href"},
+                { "name": "ufcstats", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='http://www.ufcstats.com/']", "type": "attribute", "attribute": "href"},
+                { "name": "bestfightodds", "selector": "strong:-soup-contains('Resource Links:') ~ div a[href^='https://www.bestfightodds.com/']", "type": "attribute", "attribute": "href"}
             ]
         },
         {
