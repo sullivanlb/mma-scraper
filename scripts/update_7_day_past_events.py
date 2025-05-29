@@ -268,11 +268,15 @@ async def extract_event_urls(base_url: str) -> List[str]:
         for event in data[0]["URLs"]:
             event_date = parse_listing_date(event['date'])  # NEW: Date from listing page
             event_url = urljoin(BASE_URL, event['url'])
-            
+
+            if event_date is None:
+                logger.warning(f"Skipping event with unparseable date: {event['date']} ({event_url})")
+                continue
+
             if event_date < cutoff_date:
                 logger.info("Reached events older than 7 days, stopping pagination")
                 return event_urls
-                
+
             if event_date >= cutoff_date:
                 event_urls.append(event_url)
                 
@@ -330,7 +334,7 @@ async def process_fight_updates(event_details: dict, event_id: int):
             fighter1_url = urljoin(BASE_URL, fighter1_url)
             fighter2_url = urljoin(BASE_URL, fighter2_url)
 
-            # Update fighter records (existing code)
+            # Update fighter records
             for fighter_url in [fighter1_url, fighter2_url]:
                 await update_fighter_record(fighter_url)
                 
