@@ -4,6 +4,7 @@
 
 import re
 from datetime import datetime
+from typing import Optional
 import pytz
 import logging
 
@@ -97,3 +98,25 @@ def parse_listing_date(date_str: str) -> datetime:
     
     logger.warning(f"Failed to parse date: {date_str}")
     return None
+
+def calculate_total_fights(self, record_str: str) -> Optional[int]:
+    """Calculate total fights from record string like '20-3-1' """
+    if not record_str:
+        return None
+    try:
+        # Split by '-' and sum all numbers (wins-losses-draws)
+        parts = record_str.split('-')
+        return sum(int(part) for part in parts if part.isdigit())
+    except (ValueError, AttributeError):
+        return None
+    
+def parse_date(self, date_str: str) -> Optional[str]:
+    """Parse date string and return in proper format for database"""
+    if not date_str:
+        return None
+    try:
+        # You might need to adjust this based on the actual date format from Tapology
+        return format_date(date_str)
+    except Exception as e:
+        logger.warning(f"Could not parse date '{date_str}': {str(e)}")
+        return None

@@ -55,7 +55,14 @@ class FighterUpdater:
                 update_data = {
                     'hash': current_hash,
                     'pro_mma_record': basic_info.get('pro_mma_record'),
-                    'last_fight_date': format_date(basic_info.get('last_fight_date'))
+                    'last_fight_date': format_date(basic_info.get('last_fight_date')),
+                    'age': basic_info.get('age'),
+                    'weight_class': basic_info.get('weight_class'),
+                    'last_weight_in': basic_info.get('last_weight_in'),
+                    'head_coach': basic_info.get('head_coach'),
+                    'current_mma_streak': basic_info.get('current_mma_streak'),
+                    'affiliation': basic_info.get('affiliation'),
+                    'other_coaches': basic_info.get('other_coaches'),
                 }
                 
                 self.db.update_fighter(fighter['id'], update_data)

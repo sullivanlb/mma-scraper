@@ -84,3 +84,11 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to create fighter: {str(e)}")
             return None
+        
+    def get_fights_by_event_id(self, event_id: int) -> List[Dict]:
+        """Get all fights for a specific event"""
+        result = self.client.table('fights')\
+            .select('id, id_fighter_1, id_fighter_2, result')\
+            .eq('id_event', event_id)\
+            .execute()
+        return result.data if result.data else []

@@ -15,7 +15,7 @@ class Config:
         
         # Scraping
         self.base_url = "https://www.tapology.com"
-        self.days_lookback = int(os.getenv('DAYS_LOOKBACK', 7))
+        self.days_offset = int(os.getenv('DAYS_OFFSET', 7))
         self.concurrent_requests = int(os.getenv('CONCURRENT_REQUESTS', 5))
         self.retry_attempts = int(os.getenv('RETRY_ATTEMPTS', 3))
         

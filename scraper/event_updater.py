@@ -1,3 +1,4 @@
+
 # =================================================================
 # scraper/event_updater.py - Handle event updates
 # =================================================================
@@ -11,7 +12,7 @@ import pytz
 from urllib.parse import urljoin
 from .web_scraper import WebScraper
 from .schemas import load_schema
-from .utils import format_date, parse_listing_date
+from .utils import format_date, parse_listing_date, calculate_total_fights, parse_date
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,25 +24,32 @@ class EventUpdater:
         self.scraper = WebScraper(config)
         self.schema_events_urls = load_schema('./schemas/schema_events_urls.json')
         self.schema_events = load_schema('./schemas/schema_events.json')
+        self.schema_profiles = load_schema('./schemas/schema_profiles.json')  # or whatever the correct path is
     
     async def update_recent_events(self):
-        """Update events from the last N days"""
-        logger.info(f"🚀 Updating events from last {self.config.days_lookback} days")
+        """Update events from the last N days and next N days"""
+        logger.info(f"🚀 Updating events from last {self.config.days_offset} days and next {self.config.days_offset} days")
         
-        # Get event URLs
-        event_urls = await self._get_recent_event_urls()
-        logger.info(f"📅 Found {len(event_urls)} events to check")
+        # Get event URLs for both past and future
+        event_urls = await self._get_event_urls_range()
+        logger.info(f"📅 Found {len(event_urls)} events to check (past + upcoming)")
         
         # Update events concurrently
         semaphore = asyncio.Semaphore(self.config.concurrent_requests)
         tasks = [self._update_single_event(semaphore, url) for url in event_urls]
         await asyncio.gather(*tasks)
     
-    async def _get_recent_event_urls(self) -> List[str]:
-        """Get event URLs from recent days"""
+    async def _get_event_urls_range(self) -> List[str]:
+        """Get event URLs from past N days and next N days"""
         event_urls = []
         page = 1
-        cutoff_date = datetime.now(pytz.UTC) - timedelta(days=self.config.days_lookback)
+        now = datetime.now(pytz.UTC)
+        
+        # Define date range: past N days to future N days
+        start_date = now - timedelta(days=self.config.days_offset)
+        end_date = now + timedelta(days=self.config.days_offset)
+        
+        logger.info(f"📅 Searching events from {start_date.date()} to {end_date.date()}")
         
         while True:
             url = f"{self.config.ufc_url}?page={page}"
@@ -50,18 +58,40 @@ class EventUpdater:
             if not data or not data[0]["URLs"]:
                 break
                 
+            found_events_in_range = False
+            
             for event in data[0]["URLs"]:
                 event_date = parse_listing_date(event['date'])
                 if not event_date:
                     continue
-                    
-                if event_date < cutoff_date:
-                    return event_urls
-                    
+                
+                # Skip events too far in the past
+                if event_date < start_date:
+                    continue
+                
+                # Stop if we've gone too far into the future
+                if event_date > end_date:
+                    continue
+                
+                found_events_in_range = True
                 event_urls.append(urljoin(self.config.base_url, event['url']))
+            
+            # If we didn't find any events in our date range on this page,
+            # and we're looking at past events, we can stop
+            if not found_events_in_range and page > 1:
+                # Check if the latest event on this page is older than our start date
+                latest_event_date = None
+                for event in data[0]["URLs"]:
+                    event_date = parse_listing_date(event['date'])
+                    if event_date and (not latest_event_date or event_date > latest_event_date):
+                        latest_event_date = event_date
+                
+                if latest_event_date and latest_event_date < start_date:
+                    break
             
             page += 1
         
+        # Sort by date to process in chronological order
         return event_urls
     
     async def _update_single_event(self, semaphore, event_url: str):
@@ -80,7 +110,7 @@ class EventUpdater:
                 current_hash = self._calculate_hash(event_data)
 
                 if not existing_event:
-                    # 🆕 CREATE NEW EVENT
+                    # 🆕 CREATE NEW EVENT (could be past or future)
                     logger.info(f"🆕 Creating new event: {event_url}")
                     event_id = await self._create_new_event(event_url, event_data, current_hash)
                     if event_id:
@@ -96,8 +126,11 @@ class EventUpdater:
                 # Update event data
                 await self._update_event_data(existing_event['id'], event_data, current_hash)
                 
-                # Update fights (results, finishes, etc.)
+                # Update fights (results for past events, card changes for future events)
                 await self._update_fights(event_data, existing_event['id'])
+                
+                # Check for new fights that might have been added to the card
+                await self._check_and_add_new_fights(event_data, existing_event['id'])
                 
                 logger.info(f"🔄 Updated event: {event_url}")
 
@@ -234,20 +267,104 @@ class EventUpdater:
         # Try to get fighter profile data
         fighter_data = await self.scraper.extract_data(full_url, self.schema_profiles)
         
+        # Initialize fighter record with basic data
         fighter_record = {
             'tapology_url': full_url,
             'name': fighter_name,
             'created_at': datetime.now(pytz.UTC).isoformat()
         }
         
-        # Add profile data if available
-        if fighter_data and fighter_data[0].get('Basic Infos'):
-            basic_info = fighter_data[0]['Basic Infos'][0]
-            fighter_record.update({
-                'pro_mma_record': basic_info.get('pro_mma_record'),
-                'last_fight_date': format_date(basic_info.get('last_fight_date')),
-                'hash': self._calculate_hash(fighter_data)
-            })
+        # Add comprehensive profile data if available
+        if fighter_data and len(fighter_data) > 0 and fighter_data[0].get('Basic Infos'):
+            try:
+                basic_info = fighter_data[0]['Basic Infos'][0]
+                
+                # Map all available fields from the schema to database columns
+                fighter_record.update({
+                    'nickname': basic_info.get('nickname'),
+                    'age': basic_info.get('age'),
+                    'date_of_birth': parse_date(basic_info.get('date_of_birth')),
+                    'height': basic_info.get('height'),
+                    'weight_class': basic_info.get('weight_class'),
+                    'last_weight_in': basic_info.get('last_weight_in'),
+                    'last_fight_date': parse_date(basic_info.get('last_fight_date')),
+                    'born': basic_info.get('born'),
+                    'head_coach': basic_info.get('head_coach'),
+                    'pro_mma_record': basic_info.get('pro_mma_record'),
+                    'current_mma_streak': basic_info.get('current_mma_streak'),
+                    'affiliation': basic_info.get('affiliation'),
+                    'other_coaches': basic_info.get('other_coaches'),
+                    'hash': self._calculate_hash(fighter_data)
+                })
+                
+                # Add profile image URL if available
+                if fighter_data[0].get('profile_img_url'):
+                    fighter_record['profile_img_url'] = fighter_data[0]['profile_img_url']
+                
+                # Calculate total fights from the record if available
+                if basic_info.get('pro_mma_record'):
+                    fighter_record['total_fights'] = calculate_total_fights(basic_info['pro_mma_record'])
+                    
+            except (KeyError, IndexError, TypeError) as e:
+                logger.warning(f"⚠️ Could not parse complete fighter profile for {fighter_name}: {str(e)}")
+        else:
+            logger.warning(f"⚠️ No profile data available for {fighter_name}, creating with basic info only")
         
-        result = self.db.create_fighter(fighter_record)
-        return result['id'] if result else None
+        try:
+            result = self.db.create_fighter(fighter_record)
+            return result['id'] if result else None
+        except Exception as e:
+            logger.error(f"❌ Failed to create fighter {fighter_name}: {str(e)}")
+            return None
+
+    async def _check_and_add_new_fights(self, event_data: List[Dict], event_id: int):
+        """Check for new fights added to an existing event card"""
+        try:
+            fight_cards = event_data[0].get("Fight Card", [])
+            existing_fights = self.db.get_fights_by_event_id(event_id)  # You'll need to implement this method
+            
+            # Create a set of existing fight pairs for quick lookup
+            existing_fight_pairs = set()
+            for fight in existing_fights:
+                # Create a tuple of fighter IDs (sorted to handle either order)
+                pair = tuple(sorted([fight['id_fighter_1'], fight['id_fighter_2']]))
+                existing_fight_pairs.add(pair)
+            
+            new_fights_added = 0
+            for fight in fight_cards:
+                # Get or create fighters
+                fighter1_id = await self._get_or_create_fighter(fight.get('url_fighter_1', ''), fight.get('fighter_1', ''))
+                fighter2_id = await self._get_or_create_fighter(fight.get('url_fighter_2', ''), fight.get('fighter_2', ''))
+                
+                if not fighter1_id or not fighter2_id:
+                    continue
+                
+                # Check if this fight already exists
+                fight_pair = tuple(sorted([fighter1_id, fighter2_id]))
+                if fight_pair not in existing_fight_pairs:
+                    # This is a new fight, add it
+                    fight_record = {
+                        'id_event': event_id,
+                        'id_fighter_1': fighter1_id,
+                        'id_fighter_2': fighter2_id,
+                        'fighter_1_name': fight.get('fighter_1', ''),
+                        'fighter_2_name': fight.get('fighter_2', ''),
+                        'weight_class': fight.get('weight_class', ''),
+                        'bout_order': fight.get('bout_order', 0),
+                        'result_fighter_1': fight.get('result_fighter_1'),
+                        'result_fighter_2': fight.get('result_fighter_2'),
+                        'finish_by': fight.get('finish_by'),
+                        'finish_by_details': fight.get('finish_by_details'),
+                        'rounds': fight.get('rounds'),
+                        'created_at': datetime.now(pytz.UTC).isoformat()
+                    }
+                    
+                    self.db.create_fight(fight_record)
+                    new_fights_added += 1
+                    logger.info(f"+ Added new fight: {fight.get('fighter_1')} vs {fight.get('fighter_2')}")
+            
+            if new_fights_added > 0:
+                logger.info(f"✅ Added {new_fights_added} new fights to existing event")
+                
+        except Exception as e:
+            logger.error(f"Failed to check for new fights: {str(e)}")
