@@ -12,7 +12,7 @@ import pytz
 from urllib.parse import urljoin
 from .web_scraper import WebScraper
 from .schemas import load_schema
-from .utils import format_date, parse_listing_date, calculate_total_fights, parse_date
+from .utils import format_date, parse_listing_date, calculate_total_fights
 import logging
 
 logger = logging.getLogger(__name__)
@@ -148,11 +148,15 @@ class EventUpdater:
             header = event_data[0]['Header'][0]
             update_data = {
                 'hash': hash_value,
-                'mma_bouts': header.get('mma_bouts', 0)
+                'mma_bouts': header.get('mma_bouts', 0),
+                'datetime': parse_listing_date(header.get('datetime')).isoformat() \
+                    if header.get('datetime') else None,
+                'broadcast': header.get('broadcast', ''),
+                'promotion': header.get('promotion', ''),
+                'venue': header.get('venue', ''),
+                'location': header.get('location', ''),
+                'img_url': header.get('img_url', '')
             }
-            
-            if 'datetime' in header:
-                update_data['datetime'] = format_date(header['datetime'])
             
             self.db.update_event(event_id, update_data)
             
@@ -283,11 +287,11 @@ class EventUpdater:
                 fighter_record.update({
                     'nickname': basic_info.get('nickname'),
                     'age': basic_info.get('age'),
-                    'date_of_birth': parse_date(basic_info.get('date_of_birth')),
+                    'date_of_birth': parse_listing_date(basic_info.get('date_of_birth')),
                     'height': basic_info.get('height'),
                     'weight_class': basic_info.get('weight_class'),
                     'last_weight_in': basic_info.get('last_weight_in'),
-                    'last_fight_date': parse_date(basic_info.get('last_fight_date')),
+                    'last_fight_date': parse_listing_date(basic_info.get('last_fight_date')),
                     'born': basic_info.get('born'),
                     'head_coach': basic_info.get('head_coach'),
                     'pro_mma_record': basic_info.get('pro_mma_record'),

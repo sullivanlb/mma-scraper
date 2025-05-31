@@ -19,8 +19,8 @@ async def main():
     await event_updater.update_recent_events()
     
     # Update all fighters that need updating
-    fighter_updater = FighterUpdater(config, db)
-    await fighter_updater.update_all_fighters()
+    # fighter_updater = FighterUpdater(config, db)
+    # await fighter_updater.update_all_fighters()
     
     logger.info("✅ All updates completed")
 

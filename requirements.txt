@@ -4,3 +4,4 @@ python-dotenv==1.1.0
 pytz==2025.1
 supabase==2.15.0
 tenacity==9.0.0
+pendulum>=3.0.0

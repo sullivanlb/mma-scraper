@@ -66,7 +66,30 @@ class FighterUpdater:
                 }
                 
                 self.db.update_fighter(fighter['id'], update_data)
-                logger.info(f"🔄 Updated fighter: {fighter['tapology_url']}")
+
+                # Update fighter fights
+                for fight in fighter_data[0].get('Fights', []):
+                    fight_data = {
+                        'id_event': fight.get('event_id'),
+                        'id_fighter_1': fighter['id'],
+                        'id_fighter_2': fight.get('opponent_id'),
+                        'result': fight.get('result'),
+                        'date': format_date(fight.get('date')),
+                        'weight_class': fight.get('weight_class'),
+                    }
+                    
+                    existing_fight = self.db.get_fight(
+                        fighter['id'], 
+                        fighter['id'], 
+                        fight.get('opponent_id')
+                    )
+                    
+                    if existing_fight:
+                        self.db.update_fight(existing_fight['id'], fight_data)
+                    else:
+                        self.db.create_fight(fight_data)
+
+                logger.info(f"🔄 [Base info] Updated fighter: {fighter['tapology_url']}")
                 
             except Exception as e:
                 logger.error(f"❌ Failed to update fighter {fighter.get('tapology_url')}: {str(e)}")
