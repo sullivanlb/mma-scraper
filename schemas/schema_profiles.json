@@ -61,11 +61,13 @@
             "type": "nested_list",
             "fields": [
                 { "name": "opponent", "selector": "div div div div a[href^=\"/fightcenter/fighters/\"]", "type": "text"},
+                { "name": "opponent_tapology_url", "selector": "div div div div a[href^=\"/fightcenter/fighters/\"]", "type": "attribute", "attribute": "href"},
                 { "name": "result", "selector": "div div.result > div:nth-child(1)", "type": "text"},
                 { "name": "finishBy", "selector": "div div.result > div:nth-child(2) > div", "type": "text"},
                 { "name": "details", "selector": "div a[title^=\"Bout Page\"]", "type": "text"},
                 { "name": "year", "selector": "div .basis-full > div > span:first-child", "type": "text"},
-                { "name": "monthDay", "selector": "div .basis-full > div > span:last-child", "type": "text"}
+                { "name": "monthDay", "selector": "div .basis-full > div > span:last-child", "type": "text"},
+                { "name": "event_url", "selector": "div a[title=\"Event Page\"]", "type": "attribute", "attribute": "href"}
             ]
         }
     ]

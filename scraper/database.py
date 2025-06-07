@@ -92,3 +92,12 @@ class Database:
             .eq('id_event', event_id)\
             .execute()
         return result.data if result.data else []
+    
+    def get_event_by_name_and_date(self, name: str, date: str) -> Optional[Dict]:
+        """Get event by name and date"""
+        result = self.client.table('events')\
+            .select('*')\
+            .eq('name', name)\
+            .eq('date', date)\
+            .execute()
+        return result.data[0] if result.data else None

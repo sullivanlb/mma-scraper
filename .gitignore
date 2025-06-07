@@ -4,3 +4,4 @@ _trash/
 venv/
 test.py
 test/
+__pycache__/

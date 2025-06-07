@@ -12,7 +12,7 @@ import pytz
 from urllib.parse import urljoin
 from .web_scraper import WebScraper
 from .schemas import load_schema
-from .utils import format_date, parse_listing_date, calculate_total_fights
+from .utils import parse_listing_date, get_or_create_fighter, calculate_hash
 import logging
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,8 @@ class EventUpdater:
                     logger.error(f"❌ No data extracted from {event_url}")
                     return
 
-                current_hash = self._calculate_hash(event_data)
+                current_hash = calculate_hash(self, event_data)
+                print (f"Current hash for {event_url}: {current_hash}")
 
                 if not existing_event:
                     # 🆕 CREATE NEW EVENT (could be past or future)
@@ -130,17 +131,12 @@ class EventUpdater:
                 await self._update_fights(event_data, existing_event['id'])
                 
                 # Check for new fights that might have been added to the card
-                await self._check_and_add_new_fights(event_data, existing_event['id'])
+                await self._check_and_add_new_fights(self, event_data, existing_event['id'])
                 
                 logger.info(f"🔄 Updated event: {event_url}")
 
             except Exception as e:
                 logger.error(f"❌ Failed to process event {event_url}: {str(e)}")
-    
-    def _calculate_hash(self, data) -> str:
-        """Calculate hash for change detection"""
-        json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
     
     async def _update_event_data(self, event_id: int, event_data: List[Dict], hash_value: str):
         """Update event header information"""
@@ -197,16 +193,19 @@ class EventUpdater:
         """Create a new event in the database"""
         try:
             header = event_data[0]['Header'][0]
+            name = event_data[0]['name']
             
             # Prepare event data
             event_record = {
                 'tapology_url': event_url,
                 'hash': hash_value,
-                'name': header.get('event_name', 'Unknown Event'),
+                'name': name if name else 'Unknown Event',
                 'promotion': header.get('promotion', 'UFC'),
                 'location': header.get('location', ''),
-                'datetime': format_date(header.get('datetime')),
+                'venue': header.get('venue', ''),
+                'datetime': parse_listing_date(header.get('datetime')).isoformat(),
                 'mma_bouts': header.get('mma_bouts', 0),
+                'img_url': header.get('img_url', ''),
                 'created_at': datetime.now(pytz.UTC).isoformat()
             }
             
@@ -225,11 +224,11 @@ class EventUpdater:
         for fight in fight_cards:
             try:
                 # Get or create fighters first
-                fighter1_id = await self._get_or_create_fighter(fight.get('url_fighter_1', ''), fight.get('fighter_1', ''))
-                fighter2_id = await self._get_or_create_fighter(fight.get('url_fighter_2', ''), fight.get('fighter_2', ''))
+                fighter1_id = await get_or_create_fighter(self, fight.get('url_fighter_1', ''), fight.get('name_fighter_1', ''))
+                fighter2_id = await get_or_create_fighter(self, fight.get('url_fighter_2', ''), fight.get('name_fighter_2', ''))
                 
                 if not fighter1_id or not fighter2_id:
-                    logger.warning(f"⚠️ Skipping fight - missing fighters: {fight.get('fighter_1')} vs {fight.get('fighter_2')}")
+                    logger.warning(f"⚠️ Skipping fight - missing fighters: {fight.get('name_fighter_1')} vs {fight.get('name_fighter_2')}")
                     continue
                 
                 # Create fight record
@@ -237,15 +236,13 @@ class EventUpdater:
                     'id_event': event_id,
                     'id_fighter_1': fighter1_id,
                     'id_fighter_2': fighter2_id,
-                    'fighter_1_name': fight.get('fighter_1', ''),
-                    'fighter_2_name': fight.get('fighter_2', ''),
-                    'weight_class': fight.get('weight_class', ''),
-                    'bout_order': fight.get('bout_order', 0),
                     'result_fighter_1': fight.get('result_fighter_1'),
                     'result_fighter_2': fight.get('result_fighter_2'),
                     'finish_by': fight.get('finish_by'),
                     'finish_by_details': fight.get('finish_by_details'),
                     'rounds': fight.get('rounds'),
+                    'opponent_tapology_url': fight.get('url_fighter_2', ''),
+                    'minutes_per_round': fight.get('minutes_per_round', 5),
                     'created_at': datetime.now(pytz.UTC).isoformat()
                 }
                 
@@ -253,73 +250,6 @@ class EventUpdater:
                 
             except Exception as e:
                 logger.error(f"Failed to create fight: {str(e)}")
-
-    async def _get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Optional[int]:
-        """Get fighter ID or create new fighter if doesn't exist"""
-        if not fighter_url:
-            return None
-            
-        # Check if fighter exists
-        existing_fighter = self.db.get_fighter_by_url(fighter_url)
-        if existing_fighter:
-            return existing_fighter['id']
-        
-        # Create new fighter
-        logger.info(f"🆕 Creating new fighter: {fighter_name}")
-        full_url = urljoin(self.config.base_url, fighter_url)
-        
-        # Try to get fighter profile data
-        fighter_data = await self.scraper.extract_data(full_url, self.schema_profiles)
-        
-        # Initialize fighter record with basic data
-        fighter_record = {
-            'tapology_url': full_url,
-            'name': fighter_name,
-            'created_at': datetime.now(pytz.UTC).isoformat()
-        }
-        
-        # Add comprehensive profile data if available
-        if fighter_data and len(fighter_data) > 0 and fighter_data[0].get('Basic Infos'):
-            try:
-                basic_info = fighter_data[0]['Basic Infos'][0]
-                
-                # Map all available fields from the schema to database columns
-                fighter_record.update({
-                    'nickname': basic_info.get('nickname'),
-                    'age': basic_info.get('age'),
-                    'date_of_birth': parse_listing_date(basic_info.get('date_of_birth')),
-                    'height': basic_info.get('height'),
-                    'weight_class': basic_info.get('weight_class'),
-                    'last_weight_in': basic_info.get('last_weight_in'),
-                    'last_fight_date': parse_listing_date(basic_info.get('last_fight_date')),
-                    'born': basic_info.get('born'),
-                    'head_coach': basic_info.get('head_coach'),
-                    'pro_mma_record': basic_info.get('pro_mma_record'),
-                    'current_mma_streak': basic_info.get('current_mma_streak'),
-                    'affiliation': basic_info.get('affiliation'),
-                    'other_coaches': basic_info.get('other_coaches'),
-                    'hash': self._calculate_hash(fighter_data)
-                })
-                
-                # Add profile image URL if available
-                if fighter_data[0].get('profile_img_url'):
-                    fighter_record['profile_img_url'] = fighter_data[0]['profile_img_url']
-                
-                # Calculate total fights from the record if available
-                if basic_info.get('pro_mma_record'):
-                    fighter_record['total_fights'] = calculate_total_fights(basic_info['pro_mma_record'])
-                    
-            except (KeyError, IndexError, TypeError) as e:
-                logger.warning(f"⚠️ Could not parse complete fighter profile for {fighter_name}: {str(e)}")
-        else:
-            logger.warning(f"⚠️ No profile data available for {fighter_name}, creating with basic info only")
-        
-        try:
-            result = self.db.create_fighter(fighter_record)
-            return result['id'] if result else None
-        except Exception as e:
-            logger.error(f"❌ Failed to create fighter {fighter_name}: {str(e)}")
-            return None
 
     async def _check_and_add_new_fights(self, event_data: List[Dict], event_id: int):
         """Check for new fights added to an existing event card"""
@@ -337,8 +267,8 @@ class EventUpdater:
             new_fights_added = 0
             for fight in fight_cards:
                 # Get or create fighters
-                fighter1_id = await self._get_or_create_fighter(fight.get('url_fighter_1', ''), fight.get('fighter_1', ''))
-                fighter2_id = await self._get_or_create_fighter(fight.get('url_fighter_2', ''), fight.get('fighter_2', ''))
+                fighter1_id = await get_or_create_fighter(self, fight.get('url_fighter_1', ''), fight.get('fighter_1', ''))
+                fighter2_id = await get_or_create_fighter(self, fight.get('url_fighter_2', ''), fight.get('fighter_2', ''))
                 
                 if not fighter1_id or not fighter2_id:
                     continue
@@ -351,15 +281,13 @@ class EventUpdater:
                         'id_event': event_id,
                         'id_fighter_1': fighter1_id,
                         'id_fighter_2': fighter2_id,
-                        'fighter_1_name': fight.get('fighter_1', ''),
-                        'fighter_2_name': fight.get('fighter_2', ''),
-                        'weight_class': fight.get('weight_class', ''),
-                        'bout_order': fight.get('bout_order', 0),
                         'result_fighter_1': fight.get('result_fighter_1'),
                         'result_fighter_2': fight.get('result_fighter_2'),
                         'finish_by': fight.get('finish_by'),
                         'finish_by_details': fight.get('finish_by_details'),
                         'rounds': fight.get('rounds'),
+                        'minutes_per_round': fight.get('minutes_per_round', 5),
+                        'opponent_tapology_url': fight.get('url_fighter_2', ''),
                         'created_at': datetime.now(pytz.UTC).isoformat()
                     }
                     
