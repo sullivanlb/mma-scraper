@@ -1,7 +1,16 @@
-virt
-.env
-_trash/
+# Python virtual environments
 venv/
+virt
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+
+# Test files and folders
 test.py
 test/
-__pycache__/
+
+# Trash folder
+_trash/
