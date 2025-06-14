@@ -7,6 +7,9 @@ virt
 
 # Python cache
 __pycache__/
+*/__pycache__/
+*.py[cod]
+*.so
 
 # Test files and folders
 test.py

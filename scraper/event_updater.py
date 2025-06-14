@@ -107,7 +107,7 @@ class EventUpdater:
                     logger.error(f"❌ No data extracted from {event_url}")
                     return
 
-                current_hash = calculate_hash(self, event_data)
+                current_hash = calculate_hash(event_data)
                 print (f"Current hash for {event_url}: {current_hash}")
 
                 if not existing_event:
@@ -121,7 +121,7 @@ class EventUpdater:
 
                 # 🔄 UPDATE EXISTING EVENT
                 if existing_event.get('hash') == current_hash:
-                    logger.info(f"✅ Event unchanged: {event_url}")
+                    logger.info(f"✅ Event unchanged: {event_url} hash = {existing_event.get('hash')} | current hash {current_hash}")
                     return
 
                 # Update event data
@@ -131,7 +131,7 @@ class EventUpdater:
                 await self._update_fights(event_data, existing_event['id'])
                 
                 # Check for new fights that might have been added to the card
-                await self._check_and_add_new_fights(self, event_data, existing_event['id'])
+                await self._check_and_add_new_fights(event_data, existing_event['id'])
                 
                 logger.info(f"🔄 Updated event: {event_url}")
 
@@ -149,6 +149,7 @@ class EventUpdater:
                     if header.get('datetime') else None,
                 'broadcast': header.get('broadcast', ''),
                 'promotion': header.get('promotion', ''),
+                'broadcast': header.get('broadcast', ''),
                 'venue': header.get('venue', ''),
                 'location': header.get('location', ''),
                 'img_url': header.get('img_url', '')
@@ -164,15 +165,17 @@ class EventUpdater:
         for fight in event_data[0]["Fight Card"]:
             try:
                 # Get fighters
-                fighter1 = self.db.get_fighter_by_url(fight.get('url_fighter_1', ''))
-                fighter2 = self.db.get_fighter_by_url(fight.get('url_fighter_2', ''))
+                fighter1 = self.db.get_fighter_by_url(urljoin(self.config.base_url, fight.get('url_fighter_1', '')))
+                fighter2 = self.db.get_fighter_by_url(urljoin(self.config.base_url, fight.get('url_fighter_2', '')))
                 
                 if not fighter1 or not fighter2:
+                    print("One fighter of the fight not found")
                     continue
                 
                 # Get fight record
-                fight_record = self.db.get_fight(event_id, fighter1['id'], fighter2['id'])
+                fight_record = self.db.get_fight_by_fighters_and_event(fighter1['id'], fighter2['id'], event_id)
                 if not fight_record:
+                    print(f"Fight not found : {event_id}, {fighter1['id']}, {fighter2['id']}")
                     continue
                 
                 # Update fight
@@ -184,7 +187,7 @@ class EventUpdater:
                     'rounds': fight.get('rounds')
                 }
                 
-                self.db.update_fight(fight_record['id'], fight_data)
+                self.db.update_fight(fight_record[0]['id'], fight_data)
                 
             except Exception as e:
                 logger.error(f"Failed to update fight: {str(e)}")
@@ -201,6 +204,7 @@ class EventUpdater:
                 'hash': hash_value,
                 'name': name if name else 'Unknown Event',
                 'promotion': header.get('promotion', 'UFC'),
+                'broadcast': header.get('broadcast', ''),
                 'location': header.get('location', ''),
                 'venue': header.get('venue', ''),
                 'datetime': parse_listing_date(header.get('datetime')).isoformat(),
@@ -230,6 +234,22 @@ class EventUpdater:
                 if not fighter1_id or not fighter2_id:
                     logger.warning(f"⚠️ Skipping fight - missing fighters: {fight.get('name_fighter_1')} vs {fight.get('name_fighter_2')}")
                     continue
+
+                # If fighters have no small_img_url, then add them
+                fighter1 = self.db.get_fighter_by_id(fighter1_id)
+                fighter2 = self.db.get_fighter_by_id(fighter2_id)
+
+                if fighter1 and fighter1.get('small_img_url') is None:
+                    fighter_1_data = {'small_img_url': fight.get('small_fighter_1_img_url', '')}
+                    self.db.update_fighter(fighter1_id, fighter_1_data)
+                elif fighter1 is None:
+                    print(f"Fighter with ID {fighter1_id} not found")
+
+                if fighter2 and fighter2.get('small_img_url') is None:
+                    fighter_2_data = {'small_img_url': fight.get('small_fighter_2_img_url', '')}
+                    self.db.update_fighter(fighter2_id, fighter_2_data)
+                elif fighter2 is None:
+                    print(f"Fighter with ID {fighter2_id} not found")
                 
                 # Create fight record
                 fight_record = {

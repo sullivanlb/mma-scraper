@@ -51,7 +51,9 @@
                 { "name": "name_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "text"},
                 { "name": "title_fighter_2", "selector": "#fb1TitleMatchup", "type": "regex", "pattern": "(Champion|Challenger)", "transform": "strip", "default": null},
                 { "name": "result_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] div[class*=\"bg-\"] span", "type": "text"},
-                { "name": "url_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"}
+                { "name": "url_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"},
+                { "name": "small_fighter_1_img_url", "selector": "div.flex.flex-col.w-\\[37\\%\\]:first-child img[alt]", "type": "attribute", "attribute": "src"},
+                { "name": "small_fighter_2_img_url", "selector": "div.flex.flex-col.w-\\[37\\%\\]:last-child img[alt]", "type": "attribute", "attribute": "src"}
             ]
         }
     ]

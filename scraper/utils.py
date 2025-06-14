@@ -192,7 +192,7 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
         return None
         
     # Check if fighter exists
-    existing_fighter = self.db.get_fighter_by_url(fighter_url)
+    existing_fighter = self.db.get_fighter_by_url(urljoin(self.config.base_url, fighter_url))
     if existing_fighter:
         return existing_fighter['id']
     
@@ -230,11 +230,11 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
                 'current_mma_streak': basic_info.get('current_mma_streak'),
                 'affiliation': basic_info.get('affiliation'),
                 'other_coaches': basic_info.get('other_coaches'),
-                'hash': calculate_hash(self, fighter_data)
+                'hash': calculate_hash(fighter_data)
             })
             
             # Add profile image URL if available
-            if fighter_data[0].get('profile_img_url'):
+            if fighter_data[0]['profile_img_url']:
                 fighter_record['profile_img_url'] = fighter_data[0]['profile_img_url']
             
             # Calculate total fights from the record if available
@@ -253,7 +253,7 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
         logger.error(f"❌ Failed to create fighter {fighter_name}: {str(e)}")
         return None
 
-def calculate_hash(self, data) -> str:
+def calculate_hash(data) -> str:
     """Calculate hash for change detection"""
     import json
     import hashlib

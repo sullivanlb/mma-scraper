@@ -4,6 +4,7 @@
 
 from supabase import create_client, Client
 from typing import List, Dict, Optional
+from .utils import calculate_hash
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,11 +31,40 @@ class Database:
             .select('id,hash')\
             .eq('tapology_url', url)\
             .execute()
+            
+        return result.data[0] if result.data else None
+    
+    def get_fighter_by_id(self, id: int) -> Optional[Dict]:
+        """Get fighter by ID"""
+        result = self.client.table('fighters')\
+            .select('*')\
+            .eq('id', id)\
+            .execute()
         return result.data[0] if result.data else None
     
     def update_fighter(self, fighter_id: int, data: Dict):
         """Update fighter data"""
-        self.client.table('fighters').update(data).eq('id', fighter_id).execute()
+        fighter = self.get_fighter_by_id(fighter_id)
+        
+        if fighter is None:
+            print(f"Fighter with ID {fighter_id} not found")
+            return
+        
+        for key, value in data.items():
+            fighter[key] = value 
+
+        # Calculate hash of the updated fighter
+        fighter_hash = calculate_hash(fighter)
+        
+        # Add the hash to the update data
+        update_data = data.copy()
+        update_data['hash'] = fighter_hash
+
+        try:
+            result = self.client.table('fighters').update(update_data).eq('id', fighter_id).execute()
+            # print(f"Update result: {result}")
+        except Exception as e:
+            print(f"Error updating fighter: {e}")
     
     def get_fight(self, event_id: int, fighter1_id: int, fighter2_id: int) -> Optional[Dict]:
         """Get specific fight"""
@@ -54,10 +84,20 @@ class Database:
         """Get fighters that haven't been updated recently"""
         # You can add logic here to check last_updated timestamp
         result = self.client.table('fighters')\
-            .select('id,tapology_url,hash')\
+            .select('*')\
             .execute()
         return result.data
     
+    def get_fight_by_fighters_and_event(self, id_fighter_1, id_fighter_2, id_event) -> List[Dict]:
+        """Get fight by fighters and by event"""
+        result = self.client.table('fights')\
+            .select('*')\
+            .eq('id_event', id_event)\
+            .or_(f'and(id_fighter_1.eq.{id_fighter_1},id_fighter_2.eq.{id_fighter_2}),and(id_fighter_1.eq.{id_fighter_2},id_fighter_2.eq.{id_fighter_1})')\
+            .execute()
+        
+        return result.data
+
     def create_event(self, event_data: Dict) -> Optional[Dict]:
         """Create new event"""
         try:
@@ -88,7 +128,7 @@ class Database:
     def get_fights_by_event_id(self, event_id: int) -> List[Dict]:
         """Get all fights for a specific event"""
         result = self.client.table('fights')\
-            .select('id, id_fighter_1, id_fighter_2, result')\
+            .select('*')\
             .eq('id_event', event_id)\
             .execute()
         return result.data if result.data else []
