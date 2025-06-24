@@ -25,28 +25,22 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
     clean_date = re.sub(r'\s+ET$', '', clean_date, flags=re.IGNORECASE)
     
     # Debug: print what we're trying to parse
-    # print(f"Attempting to parse: '{clean_date}'")
+    print(f"Attempting to parse: '{clean_date}'")
     
     try:
         # First, try to parse as-is with explicit timezone
         parsed = pendulum.parse(clean_date, tz='America/New_York')
-        # print(f"Successfully parsed: {parsed}")
         return parsed.in_timezone('UTC')
         
     except Exception as e:
-        # print(f"First parse attempt failed: {e}")
-        
         # Try without timezone specification first
         try:
             parsed = pendulum.parse(clean_date)
             # Then set timezone
             parsed = parsed.in_timezone('America/New_York')
-            # print(f"Successfully parsed without initial timezone: {parsed}")
             return parsed.in_timezone('UTC')
             
         except Exception as e2:
-            # print(f"Second parse attempt failed: {e2}")
-            
             # If that fails, try adding the current year for partial dates
             current_year = pendulum.now().year
             
@@ -64,11 +58,9 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
                         parsed = pendulum.parse(date_with_year)
                         parsed = parsed.in_timezone('America/New_York')
                     
-                    # print(f"Successfully parsed with year adjustment: {parsed}")
                     return parsed.in_timezone('UTC')
                     
                 except Exception as e3:
-                    # print(f"Year adjustment failed: {e3}")
                     pass
                     
             # Last resort: try manual parsing for common patterns
@@ -76,20 +68,22 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
 
 def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
     """Manual parsing fallback for common date patterns."""
-    # print(f"Attempting manual fallback for: '{date_str}'")
+    print(f"Attempting manual fallback for: '{date_str}'")
     
-    # Common patterns to try
+    # Enhanced patterns that capture time
     patterns = [
-        r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',                                          # "January 18, 2025" or "Aug 17, 2024"
-        r'(?:\w+\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+at\s+.*)?',               # "Saturday 05.31.2025 at 06:30 PM"
-        r'(?:\w+\s+)?(\w+)\s+(\d{1,2}),\s*(?:\d{1,2}(?::\d{2})?[ap]m,\s*)?(\d{4})', # "Sat Sep 13, 6pm, 2025"
-        r'(\w+)\s+(\d{1,2}),\s*(?:\d{1,2}(?::\d{2})?[ap]m,\s*)?(\d{4})',         # "Aug 16, 6pm, 2025"
+        r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',                                          # "January 18, 2025"
+        r'(\d{4})\s+(\w+)\s+(\d{1,2})',                                           # "1999 May 04"
+        # FIXED: This pattern now captures the time portion
+        r'(?:\w+\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+at\s+(\d{1,2}):(\d{2})\s+([AP]M))?',  # "Saturday 06.28.2025 at 06:30 PM"
+        r'(?:\w+\s+)?(\w+)\s+(\d{1,2}),\s*(?:(\d{1,2})(?::(\d{2}))?([ap]m),\s*)?(\d{4})',     # "Sat Sep 13, 6pm, 2025"
+        r'(\w+)\s+(\d{1,2}),\s*(?:(\d{1,2})(?::(\d{2}))?([ap]m),\s*)?(\d{4})',               # "Aug 16, 6pm, 2025" 
         r'(\d{1,2})/(\d{1,2})/(\d{4})',                                            # "1/18/2025"
         r'(\d{4})-(\d{1,2})-(\d{1,2})',                                            # "2025-01-18"
         r'(\w+)\s+(\d{1,2})',                                                      # "January 18" (no year)
     ]
     
-    # Comprehensive month mapping (full names and abbreviations)
+    # Comprehensive month mapping
     month_map = {
         # Full names
         'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -106,54 +100,89 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
         if match:
             try:
                 groups = match.groups()
-                # print(f"Pattern matched: {pattern}, groups: {groups}")
+                print(f"Pattern matched: groups: {groups}")
                 
-                if len(groups) == 3:
-                    if pattern == patterns[0]:  # Month name format
-                        month_name, day, year = groups
-                        # Convert month name to number
-                        month = month_map.get(month_name.lower())
-                        # print(f"Looking up month '{month_name.lower()}' -> {month}")
-                        if month:
-                            parsed = pendulum.datetime(int(year), month, int(day), tz='America/New_York')
-                            # print(f"Manual parse successful: {parsed}")
-                            return parsed.in_timezone('UTC')
-                        # else:
-                            # print(f"Month '{month_name}' not found in month_map")
-                    
-                    elif pattern == patterns[1]:  # MM.DD.YYYY format (with optional day and time)
-                        month, day, year = groups
-                        parsed = pendulum.datetime(int(year), int(month), int(day), tz='America/New_York')
-                        # print(f"Manual parse successful (MM.DD.YYYY): {parsed}")
+                if pattern == patterns[0]:  # Month name format
+                    month_name, day, year = groups
+                    month = month_map.get(month_name.lower())
+                    if month:
+                        parsed = pendulum.datetime(int(year), month, int(day), tz='America/New_York')
                         return parsed.in_timezone('UTC')
-                    
-                    elif pattern == patterns[2] or pattern == patterns[3]:  # Month name with optional day prefix and time
-                        month_name, day, year = groups
-                        month = month_map.get(month_name.lower())
-                        # print(f"Looking up month '{month_name.lower()}' -> {month}")
-                        if month:
-                            parsed = pendulum.datetime(int(year), month, int(day), tz='America/New_York')
-                            # print(f"Manual parse successful (with time): {parsed}")
-                            return parsed.in_timezone('UTC')
-                        # else:
-                        #     print(f"Month '{month_name}' not found in month_map")
-                    
-                    elif pattern == patterns[4]:  # MM/DD/YYYY
-                        month, day, year = groups
-                        parsed = pendulum.datetime(int(year), int(month), int(day), tz='America/New_York')
-                        # print(f"Manual parse successful: {parsed}")
+                        
+                elif pattern == patterns[1]:  # YYYY Month DD
+                    year, month_name, day = groups
+                    month = month_map.get(month_name.lower())
+                    if month:
+                        parsed = pendulum.datetime(int(year), month, int(day), tz='America/New_York')
                         return parsed.in_timezone('UTC')
+                        
+                elif pattern == patterns[2]:  # MM.DD.YYYY format with optional time
+                    month, day, year, hour, minute, ampm = groups
                     
-                    elif pattern == patterns[5]:  # YYYY-MM-DD
-                        year, month, day = groups
-                        parsed = pendulum.datetime(int(year), int(month), int(day), tz='America/New_York')
-                        # print(f"Manual parse successful: {parsed}")
+                    # Default to midnight if no time specified
+                    hour_24 = 0
+                    minute_val = 0
+                    
+                    # Parse time if provided
+                    if hour and ampm:
+                        hour_val = int(hour)
+                        minute_val = int(minute) if minute else 0
+                        
+                        # Convert to 24-hour format
+                        if ampm.upper() == 'PM' and hour_val != 12:
+                            hour_24 = hour_val + 12
+                        elif ampm.upper() == 'AM' and hour_val == 12:
+                            hour_24 = 0
+                        else:
+                            hour_24 = hour_val
+                    
+                    parsed = pendulum.datetime(int(year), int(month), int(day), 
+                                             hour_24, minute_val, tz='America/New_York')
+                    print(f"Manual parse successful with time: {parsed}")
+                    return parsed.in_timezone('UTC')
+                
+                elif pattern == patterns[3] or pattern == patterns[4]:  # Month name with time
+                    if pattern == patterns[3]:  # "Sat Sep 13, 6pm, 2025"
+                        month_name, day, hour, minute, ampm, year = groups
+                    else:  # "Aug 16, 6pm, 2025"
+                        month_name, day, hour, minute, ampm, year = groups
+                    
+                    month = month_map.get(month_name.lower())
+                    if month:
+                        # Default to midnight if no time
+                        hour_24 = 0
+                        minute_val = 0
+                        
+                        # Parse time if provided
+                        if hour and ampm:
+                            hour_val = int(hour)
+                            minute_val = int(minute) if minute else 0
+                            
+                            # Convert to 24-hour format
+                            if ampm.lower() == 'pm' and hour_val != 12:
+                                hour_24 = hour_val + 12
+                            elif ampm.lower() == 'am' and hour_val == 12:
+                                hour_24 = 0
+                            else:
+                                hour_24 = hour_val
+                        
+                        parsed = pendulum.datetime(int(year), month, int(day),
+                                                 hour_24, minute_val, tz='America/New_York')
                         return parsed.in_timezone('UTC')
                 
-                elif len(groups) == 2:  # No year provided
+                elif pattern == patterns[5]:  # MM/DD/YYYY
+                    month, day, year = groups
+                    parsed = pendulum.datetime(int(year), int(month), int(day), tz='America/New_York')
+                    return parsed.in_timezone('UTC')
+                
+                elif pattern == patterns[6]:  # YYYY-MM-DD
+                    year, month, day = groups
+                    parsed = pendulum.datetime(int(year), int(month), int(day), tz='America/New_York')
+                    return parsed.in_timezone('UTC')
+                
+                elif pattern == patterns[7] and len(groups) == 2:  # No year provided
                     month_name, day = groups
                     month = month_map.get(month_name.lower())
-                    # print(f"Looking up month '{month_name.lower()}' -> {month}")
                     if month:
                         current_year = pendulum.now().year
                         parsed = pendulum.datetime(current_year, month, int(day), tz='America/New_York')
@@ -163,13 +192,10 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
                         if parsed < now.subtract(months=6):
                             parsed = pendulum.datetime(current_year + 1, month, int(day), tz='America/New_York')
                         
-                        # print(f"Manual parse successful (year assumed): {parsed}")
                         return parsed.in_timezone('UTC')
-                    # else:
-                    #     print(f"Month '{month_name}' not found in month_map")
                         
             except Exception as e:
-                # print(f"Manual parse attempt failed: {e}")
+                print(f"Manual parse attempt failed: {e}")
                 continue
     
     print(f"All parsing attempts failed for: '{date_str}'")
