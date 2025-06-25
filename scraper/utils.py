@@ -276,7 +276,7 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
                 'pro_mma_record': normalize_record(basic_info.get('pro_mma_record')),
                 'current_mma_streak': basic_info.get('current_mma_streak'),
                 'affiliation': '' if basic_info.get('affiliation') == 'N/A' else basic_info.get('affiliation'),
-                'other_coaches': [] if basic_info.get('other_coaches') == 'N/A' else basic_info.get('other_coaches'),
+                'other_coaches': '' if basic_info.get('other_coaches') == 'N/A' else basic_info.get('other_coaches'),
                 'hash': calculate_hash(fighter_data)
             })
             
@@ -321,3 +321,9 @@ def normalize_record(record_str):
             return f"{win}-{loss}-{draw}"
     # Fallback: just return original
     return record_str
+
+def parse_result(val):
+    if isinstance(val, str) and val and not any(char.isalpha() for char in val):
+        # Looks like a record (e.g., "16-0"), not a result
+        return None
+    return val

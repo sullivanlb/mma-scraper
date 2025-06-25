@@ -1,8 +1,39 @@
 # MMA Scraper
 
+### Actual Process
+1. Update recent event (7 days before + 7 days after)
+2. For each event found => update_single_event()
+    1. Create the event record if it doesn't exist in db
+    2. If it exist, update it if needed (by calculating hash)
+        1. Update event basic data then fights then check/add new fights
+3. Update all fighter in db that need update (all fighter for the moment)
+4. For each fighter found => update_single_fighter()
+    5. Get fighter in db, check hash
+        1. If hash is different it update else it go next fighter
+        2. If update, update basic data then update fighter fights of events in db, if opponent doesn't exist it get created
+
+### Next Process
+#### Phase 1: Initial Full Scraping (One-time)
+1. Get all UFC events (historical + future)
+2. For each event chronologically:
+   - Create/update event record
+   - Process all fights in event
+   - Create/update fighters as needed
+3. Mark database as "fully initialized"
+
+#### Phase 2: Incremental Updates (Ongoing)
+1. Check for new/updated events (last 30 days for safety)
+2. For each changed event:
+   - Update event if hash differs
+   - Process fight changes
+3. Smart fighter updates:
+   - Only update fighters who had recent fights
+   - Or fighters whose basic data hash changed
+   - Or fighters flagged for update
+
 ### Event
 - name
-- datetime --> TODO: support timezone
+- datetime
 - promotion
 - venue
 - location

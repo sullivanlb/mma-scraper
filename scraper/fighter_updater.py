@@ -104,6 +104,7 @@ class FighterUpdater:
                         'id_fighter_2': opponent_id,
                         'result_fighter_1': fight.get('result_fighter_1'),
                         'result_fighter_2': fight.get('result_fighter_2'),
+                        'fight_type': fight.get('fight_type'),
                         'finish_by': fight.get('finish_by'),
                         'finish_by_details': fight.get('finish_by_details'),
                         'rounds': fight.get('rounds'),
@@ -124,6 +125,7 @@ class FighterUpdater:
                         self.db.update_fight(existing_fight[0]['id'], fight_data)
                         logger.debug(f"🔄 Combat mis à jour: {fighter['name']} vs {fight.get('opponent')}")
                     else:
+                        print(f"Fighter updater: {fight_data}")
                         self.db.create_fight(fight_data)
                         logger.debug(f"🆕 Nouveau combat créé: {fighter['name']} vs {fight.get('opponent')}")
                         fights_processed += 1

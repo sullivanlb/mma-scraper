@@ -12,7 +12,7 @@ import pytz
 from urllib.parse import urljoin
 from .web_scraper import WebScraper
 from .schemas import load_schema
-from .utils import parse_listing_date, get_or_create_fighter, calculate_hash
+from .utils import parse_listing_date, get_or_create_fighter, calculate_hash, parse_result
 import logging
 
 logger = logging.getLogger(__name__)
@@ -184,6 +184,7 @@ class EventUpdater:
                     'result_fighter_2': fight.get('result_fighter_2'),
                     'finish_by': fight.get('finish_by'),
                     'finish_by_details': fight.get('finish_by_details'),
+                    'fight_type': fight.get('fight_type'),
                     'rounds': fight.get('rounds')
                 }
                 
@@ -256,9 +257,10 @@ class EventUpdater:
                     'id_event': event_id,
                     'id_fighter_1': fighter1_id,
                     'id_fighter_2': fighter2_id,
-                    'result_fighter_1': fight.get('result_fighter_1'),
-                    'result_fighter_2': fight.get('result_fighter_2'),
+                    'result_fighter_1': parse_result(fight.get('result_fighter_1')),
+                    'result_fighter_2': parse_result(fight.get('result_fighter_2')),
                     'finish_by': fight.get('finish_by'),
+                    'fight_type': fight.get('fight_type'),
                     'finish_by_details': fight.get('finish_by_details'),
                     'rounds': fight.get('rounds'),
                     'opponent_tapology_url': fight.get('url_fighter_2', ''),
@@ -266,6 +268,7 @@ class EventUpdater:
                     'created_at': datetime.now(pytz.UTC).isoformat()
                 }
                 
+                print(f"EventUpdater: Creating fight: {fight_record}")
                 self.db.create_fight(fight_record)
                 
             except Exception as e:
@@ -305,12 +308,14 @@ class EventUpdater:
                         'result_fighter_2': fight.get('result_fighter_2'),
                         'finish_by': fight.get('finish_by'),
                         'finish_by_details': fight.get('finish_by_details'),
+                        'fight_type': fight.get('fight_type'),
                         'rounds': fight.get('rounds'),
                         'minutes_per_round': fight.get('minutes_per_round', 5),
                         'opponent_tapology_url': fight.get('url_fighter_2', ''),
                         'created_at': datetime.now(pytz.UTC).isoformat()
                     }
-                    
+
+                    print(f"EventUpdater: Check and Creating fight: {fight_record}")
                     self.db.create_fight(fight_record)
                     new_fights_added += 1
                     logger.info(f"+ Added new fight: {fight.get('fighter_1')} vs {fight.get('fighter_2')}")
@@ -320,3 +325,48 @@ class EventUpdater:
                 
         except Exception as e:
             logger.error(f"Failed to check for new fights: {str(e)}")
+
+    async def _get_all_event_urls(self) -> List[str]:
+        """Get ALL event URLs from UFC, page by page without stopping"""
+        event_urls = []
+        page = 1
+        
+        logger.info(f"🔍 Starting to scrape ALL UFC events, page by page...")
+        
+        while True:
+            url = f"{self.config.ufc_url}?page={page}"
+            logger.info(f"📄 Scraping page {page}: {url}")
+            
+            try:
+                data = await self.scraper.extract_data(url, self.schema_events_urls)
+                
+                # If no data or no URLs found, we've reached the end
+                if not data or not data[0].get("URLs") or len(data[0]["URLs"]) == 0:
+                    logger.info(f"✅ No more events found on page {page}. Stopping.")
+                    break
+                
+                page_events = data[0]["URLs"]
+                logger.info(f"📋 Found {len(page_events)} events on page {page}")
+                
+                # Add all events from this page
+                for event in page_events:
+                    if event.get('url'):
+                        full_url = urljoin(self.config.base_url, event['url'])
+                        event_urls.append(full_url)
+                        
+                        # Optional: Log event details for debugging
+                        event_date = parse_listing_date(event.get('date', ''))
+                        logger.debug(f"  📅 {event.get('date', 'No date')} - {event.get('url', 'No URL')}")
+                return event_urls
+                page += 1
+                
+                # Optional: Add small delay to be respectful to the server
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                logger.error(f"❌ Error scraping page {page}: {e}")
+                # You might want to retry or break depending on your needs
+                break
+        
+        logger.info(f"🎯 Total events found: {len(event_urls)} across {page-1} pages")
+        return event_urls
