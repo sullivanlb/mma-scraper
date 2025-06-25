@@ -25,7 +25,7 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
     clean_date = re.sub(r'\s+ET$', '', clean_date, flags=re.IGNORECASE)
     
     # Debug: print what we're trying to parse
-    print(f"Attempting to parse: '{clean_date}'")
+    # print(f"Attempting to parse: '{clean_date}'")
     
     try:
         # First, try to parse as-is with explicit timezone
@@ -68,7 +68,7 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
 
 def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
     """Manual parsing fallback for common date patterns."""
-    print(f"Attempting manual fallback for: '{date_str}'")
+    # print(f"Attempting manual fallback for: '{date_str}'")
     
     # Enhanced patterns that capture time
     patterns = [
@@ -100,7 +100,7 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
         if match:
             try:
                 groups = match.groups()
-                print(f"Pattern matched: groups: {groups}")
+                # print(f"Pattern matched: groups: {groups}")
                 
                 if pattern == patterns[0]:  # Month name format
                     month_name, day, year = groups
@@ -138,7 +138,7 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
                     
                     parsed = pendulum.datetime(int(year), int(month), int(day), 
                                              hour_24, minute_val, tz='America/New_York')
-                    print(f"Manual parse successful with time: {parsed}")
+                    # print(f"Manual parse successful with time: {parsed}")
                     return parsed.in_timezone('UTC')
                 
                 elif pattern == patterns[3] or pattern == patterns[4]:  # Month name with time
@@ -195,10 +195,10 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
                         return parsed.in_timezone('UTC')
                         
             except Exception as e:
-                print(f"Manual parse attempt failed: {e}")
+                # print(f"Manual parse attempt failed: {e}")
                 continue
     
-    print(f"All parsing attempts failed for: '{date_str}'")
+    # print(f"All parsing attempts failed for: '{date_str}'")
     return None
 
 def calculate_total_fights(self, record_str: str) -> Optional[int]:
@@ -242,20 +242,41 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
             basic_info = fighter_data[0]['Basic Infos'][0]
             
             # Map all available fields from the schema to database columns
+            # Extract height in centimeters if available
+            height_raw = basic_info.get('height')
+            height_cm = None
+            if height_raw:
+                match = re.search(r'\((\d+)\s*cm\)', height_raw)
+                if match:
+                    height_cm = f"{match.group(1)}cm"
+                else:
+                    height_cm = height_raw  # fallback to original if no cm found
+
+            # Convert last_weight_in from lbs to kg if present
+            last_weight_in_kg = None
+            last_weight_in_raw = basic_info.get('last_weight_in')
+            if last_weight_in_raw:
+                match = re.match(r'([\d.]+)\s*lbs', last_weight_in_raw, re.IGNORECASE)
+                if match:
+                    lbs = float(match.group(1))
+                    last_weight_in_kg = round(lbs * 0.45359237, 1)
+                else:
+                    last_weight_in_kg = last_weight_in_raw  # fallback to original if not in expected format
+
             fighter_record.update({
-                'nickname': basic_info.get('nickname'),
+                'nickname': '' if basic_info.get('nickname') == 'N/A' else basic_info.get('nickname'),
                 'age': basic_info.get('age'),
                 'date_of_birth': parse_listing_date(basic_info.get('date_of_birth')).isoformat(),
-                'height': basic_info.get('height'),
+                'height': height_cm,
                 'weight_class': basic_info.get('weight_class'),
-                'last_weight_in': basic_info.get('last_weight_in'),
+                'last_weight_in': last_weight_in_kg,
                 'last_fight_date': parse_listing_date(basic_info.get('last_fight_date')).isoformat(),
                 'born': basic_info.get('born'),
-                'head_coach': basic_info.get('head_coach'),
-                'pro_mma_record': basic_info.get('pro_mma_record'),
+                'head_coach': '' if basic_info.get('head_coach') == 'N/A' else basic_info.get('head_coach'),
+                'pro_mma_record': normalize_record(basic_info.get('pro_mma_record')),
                 'current_mma_streak': basic_info.get('current_mma_streak'),
-                'affiliation': basic_info.get('affiliation'),
-                'other_coaches': basic_info.get('other_coaches'),
+                'affiliation': '' if basic_info.get('affiliation') == 'N/A' else basic_info.get('affiliation'),
+                'other_coaches': [] if basic_info.get('other_coaches') == 'N/A' else basic_info.get('other_coaches'),
                 'hash': calculate_hash(fighter_data)
             })
             
@@ -285,3 +306,18 @@ def calculate_hash(data) -> str:
     import hashlib
     json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+
+# Normalize pro_mma_record to "Win-Loss-Draw-NoContest" format
+def normalize_record(record_str):
+    if not record_str:
+        return None
+    # Extract main record and NC if present
+    match = re.match(r'(\d+)-(\d+)-(\d+)(?:,\s*(\d+)\s*NC)?', record_str)
+    if match:
+        win, loss, draw, nc = match.groups()
+        if nc:
+            return f"{win}-{loss}-{draw}-{nc}"
+        else:
+            return f"{win}-{loss}-{draw}"
+    # Fallback: just return original
+    return record_str
