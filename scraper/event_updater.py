@@ -150,7 +150,7 @@ class EventUpdater:
                 'broadcast': header.get('broadcast', ''),
                 'promotion': header.get('promotion', ''),
                 'broadcast': header.get('broadcast', ''),
-                'venue': header.get('venue', ''),
+                'venue': '' if header.get('venue', '') == 'N/A' else header.get('venue', ''),
                 'location': header.get('location', ''),
                 'img_url': header.get('img_url', '')
             }
@@ -329,7 +329,7 @@ class EventUpdater:
     async def _get_all_event_urls(self) -> List[str]:
         """Get ALL event URLs from UFC, page by page without stopping"""
         event_urls = []
-        page = 1
+        page = 13
         
         logger.info(f"🔍 Starting to scrape ALL UFC events, page by page...")
         
@@ -357,7 +357,6 @@ class EventUpdater:
                         # Optional: Log event details for debugging
                         event_date = parse_listing_date(event.get('date', ''))
                         logger.debug(f"  📅 {event.get('date', 'No date')} - {event.get('url', 'No URL')}")
-                return event_urls
                 page += 1
                 
                 # Optional: Add small delay to be respectful to the server
