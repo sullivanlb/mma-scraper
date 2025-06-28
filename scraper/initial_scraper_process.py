@@ -1,9 +1,9 @@
 # main.py - Simple entry point
 import asyncio
-from scraper.event_updater import EventUpdater
-from scraper.fighter_updater import FighterUpdater
-from scraper.config import Config
-from scraper.database import Database
+from app.event_updater import EventUpdater
+from app.fighter_updater import FighterUpdater
+from app.config import Config
+from app.database import Database
 import logging
 
 logging.basicConfig(level=logging.INFO)

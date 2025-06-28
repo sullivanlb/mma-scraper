@@ -19,22 +19,27 @@ class FighterUpdater:
         self.config = config
         self.db = database
         self.scraper = WebScraper(config)
-        self.schema_profiles = load_schema('./schemas/schema_profiles.json')
-        self.schema_events = load_schema('./schemas/schema_events.json')
+        self.schema_profiles = load_schema('./scraper/schemas/schema_profiles.json')
+        self.schema_events = load_schema('./scraper/schemas/schema_events.json')
     
-    async def update_all_fighters(self):
-        """Update all fighters that need updating"""
-        logger.info("🥊 Starting fighter updates")
+    async def update_fighters(self):
+        """Update fighters who have had recent fights or are flagged for an update."""
+        logger.info("🥊 Starting smart fighter updates...")
         
-        fighters = self.db.get_all_fighters_needing_update()
-        logger.info(f"👥 Found {len(fighters)} fighters to update")
+        # Get fighters who have fought in the last N days or are flagged
+        fighters_to_update = self.db.get_fighters_to_update(days_since_last_fight=self.config.days_offset)
+        logger.info(f"👥 Found {len(fighters_to_update)} fighters to update.")
         
+        if not fighters_to_update:
+            logger.info("✅ No fighters need updates.")
+            return
+
         # Update fighters concurrently
         semaphore = asyncio.Semaphore(self.config.concurrent_requests)
-        tasks = [self._update_single_fighter(semaphore, fighter) for fighter in fighters]
+        tasks = [self._update_single_fighter(semaphore, fighter) for fighter in fighters_to_update]
         await asyncio.gather(*tasks)
         
-        logger.info("✅ Fighter updates completed")
+        logger.info("✅ Fighter updates completed.")
     
     async def _update_single_fighter(self, semaphore, fighter: Dict):
         """Update a single fighter"""
@@ -72,6 +77,8 @@ class FighterUpdater:
                     'other_coaches': basic_info.get('other_coaches'),
                 }
                 
+                # After a successful update, reset the flag
+                update_data['needs_update'] = False
                 self.db.update_fighter(fighter['id'], update_data)
 
                 # Update fighter fights avec matching d'events

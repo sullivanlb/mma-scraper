@@ -22,9 +22,9 @@ class EventUpdater:
         self.config = config
         self.db = database
         self.scraper = WebScraper(config)
-        self.schema_events_urls = load_schema('./schemas/schema_events_urls.json')
-        self.schema_events = load_schema('./schemas/schema_events.json')
-        self.schema_profiles = load_schema('./schemas/schema_profiles.json')  # or whatever the correct path is
+        self.schema_events_urls = load_schema('./scraper/schemas/schema_events_urls.json')
+        self.schema_events = load_schema('./scraper/schemas/schema_events.json')
+        self.schema_profiles = load_schema('./scraper/schemas/schema_profiles.json')  # or whatever the correct path is
     
     async def update_recent_events(self):
         """Update events from the last N days and next N days"""
@@ -115,25 +115,25 @@ class EventUpdater:
                     logger.info(f"🆕 Creating new event: {event_url}")
                     event_id = await self._create_new_event(event_url, event_data, current_hash)
                     if event_id:
-                        await self._create_fights(event_data, event_id)
+                        await self._update_fights(event_data, event_id)
                         logger.info(f"✅ Created event with {len(event_data[0].get('Fight Card', []))} fights")
+                    
                     return
 
                 # 🔄 UPDATE EXISTING EVENT
-                if existing_event.get('hash') == current_hash:
-                    logger.info(f"✅ Event unchanged: {event_url} hash = {existing_event.get('hash')} | current hash {current_hash}")
-                    return
+                if existing_event.get('hash') != current_hash:
+                    # Update event data as the hash is different
+                    await self._update_event_data(existing_event['id'], event_data, current_hash)
+                    logger.info(f"🔄 Event data changed, updating: {event_url}")
+                else:
+                    logger.info(f"✅ Event basics unchanged, checking for fight updates for {event_url}")
 
-                # Update event data
-                await self._update_event_data(existing_event['id'], event_data, current_hash)
-                
+                # Always check for fight updates, regardless of the main event hash
                 # Update fights (results for past events, card changes for future events)
                 await self._update_fights(event_data, existing_event['id'])
                 
-                # Check for new fights that might have been added to the card
-                await self._check_and_add_new_fights(event_data, existing_event['id'])
+                logger.info(f"✅ Finished processing event: {event_url}")
                 
-                logger.info(f"🔄 Updated event: {event_url}")
 
             except Exception as e:
                 logger.error(f"❌ Failed to process event {event_url}: {str(e)}")
@@ -161,37 +161,64 @@ class EventUpdater:
             logger.error(f"Invalid event header data: {str(e)}")
     
     async def _update_fights(self, event_data: List[Dict], event_id: int):
-        """Update fight results"""
-        for fight in event_data[0]["Fight Card"]:
-            try:
-                # Get fighters
-                fighter1 = self.db.get_fighter_by_url(urljoin(self.config.base_url, fight.get('url_fighter_1', '')))
-                fighter2 = self.db.get_fighter_by_url(urljoin(self.config.base_url, fight.get('url_fighter_2', '')))
-                
-                if not fighter1 or not fighter2:
-                    print("One fighter of the fight not found")
-                    continue
-                
-                # Get fight record
-                fight_record = self.db.get_fight_by_fighters_and_event(fighter1['id'], fighter2['id'], event_id)
-                if not fight_record:
-                    print(f"Fight not found : {event_id}, {fighter1['id']}, {fighter2['id']}")
-                    continue
-                
-                # Update fight
-                fight_data = {
-                    'result_fighter_1': fight.get('result_fighter_1'),
-                    'result_fighter_2': fight.get('result_fighter_2'),
-                    'finish_by': fight.get('finish_by'),
-                    'finish_by_details': fight.get('finish_by_details'),
-                    'fight_type': fight.get('fight_type'),
-                    'rounds': fight.get('rounds')
-                }
-                
-                self.db.update_fight(fight_record[0]['id'], fight_data)
-                
-            except Exception as e:
-                logger.error(f"Failed to update fight: {str(e)}")
+        """Update, add, or remove fights as needed to match the scraped data."""
+        scraped_fights = event_data[0].get("Fight Card", [])
+        existing_fights = self.db.get_fights_by_event_id(event_id)
+
+        # Create sets of fighter pairs for easy comparison
+        scraped_fighter_pairs = set()
+        for fight in scraped_fights:
+            fighter1_id = await get_or_create_fighter(self, fight.get('url_fighter_1'), fight.get('name_fighter_1'))
+            fighter2_id = await get_or_create_fighter(self, fight.get('url_fighter_2'), fight.get('name_fighter_2'))
+            if fighter1_id and fighter2_id:
+                scraped_fighter_pairs.add(tuple(sorted((fighter1_id, fighter2_id))))
+
+        existing_fighter_pairs = {tuple(sorted((f['id_fighter_1'], f['id_fighter_2']))) for f in existing_fights}
+
+        # 1. Fights to DELETE (in DB but not in scraped data)
+        fights_to_delete = existing_fighter_pairs - scraped_fighter_pairs
+        for pair in fights_to_delete:
+            fight_to_delete = next((f for f in existing_fights if tuple(sorted((f['id_fighter_1'], f['id_fighter_2']))) == pair), None)
+            if fight_to_delete:
+                self.db.delete_fight(fight_to_delete['id'])
+                logger.info(f"- Removed fight: {fight_to_delete['id']}")
+
+        # 2. Fights to ADD or UPDATE
+        for fight_data in scraped_fights:
+            fighter1_id = await get_or_create_fighter(self, fight_data.get('url_fighter_1'), fight_data.get('name_fighter_1'))
+            fighter2_id = await get_or_create_fighter(self, fight_data.get('url_fighter_2'), fight_data.get('name_fighter_2'))
+
+            if not fighter1_id or not fighter2_id:
+                continue
+
+            fight_pair = tuple(sorted((fighter1_id, fighter2_id)))
+            existing_fight = next((f for f in existing_fights if tuple(sorted((f['id_fighter_1'], f['id_fighter_2']))) == fight_pair), None)
+
+            update_data = {
+                'result_fighter_1': fight_data.get('result_fighter_1'),
+                'result_fighter_2': fight_data.get('result_fighter_2'),
+                'finish_by': fight_data.get('finish_by'),
+                'finish_by_details': fight_data.get('finish_by_details'),
+                'fight_type': fight_data.get('fight_type'),
+                'rounds': fight_data.get('rounds')
+            }
+
+            if existing_fight:
+                # UPDATE existing fight
+                self.db.update_fight(existing_fight['id'], update_data)
+                # Flag both fighters for a profile update
+                self.db.flag_fighter_for_update(fighter1_id)
+                self.db.flag_fighter_for_update(fighter2_id)
+            else:
+                # ADD new fight
+                update_data.update({
+                    'id_event': event_id,
+                    'id_fighter_1': fighter1_id,
+                    'id_fighter_2': fighter2_id,
+                    'created_at': datetime.now(pytz.UTC).isoformat()
+                })
+                self.db.create_fight(update_data)
+                logger.info(f"+ Added new fight between {fighter1_id} and {fighter2_id}")
 
     async def _create_new_event(self, event_url: str, event_data: List[Dict], hash_value: str) -> Optional[int]:
         """Create a new event in the database"""
@@ -222,109 +249,9 @@ class EventUpdater:
             logger.error(f"Invalid event header for creation: {str(e)}")
             return None
 
-    async def _create_fights(self, event_data: List[Dict], event_id: int):
-        """Create fights for a new event"""
-        fight_cards = event_data[0].get("Fight Card", [])
-        
-        for fight in fight_cards:
-            try:
-                # Get or create fighters first
-                fighter1_id = await get_or_create_fighter(self, fight.get('url_fighter_1', ''), fight.get('name_fighter_1', ''))
-                fighter2_id = await get_or_create_fighter(self, fight.get('url_fighter_2', ''), fight.get('name_fighter_2', ''))
-                
-                if not fighter1_id or not fighter2_id:
-                    logger.warning(f"⚠️ Skipping fight - missing fighters: {fight.get('name_fighter_1')} vs {fight.get('name_fighter_2')}")
-                    continue
+    
 
-                # If fighters have no small_img_url, then add them
-                fighter1 = self.db.get_fighter_by_id(fighter1_id)
-                fighter2 = self.db.get_fighter_by_id(fighter2_id)
-
-                if fighter1 and fighter1.get('small_img_url') is None:
-                    fighter_1_data = {'small_img_url': fight.get('small_fighter_1_img_url', '')}
-                    self.db.update_fighter(fighter1_id, fighter_1_data)
-                elif fighter1 is None:
-                    print(f"Fighter with ID {fighter1_id} not found")
-
-                if fighter2 and fighter2.get('small_img_url') is None:
-                    fighter_2_data = {'small_img_url': fight.get('small_fighter_2_img_url', '')}
-                    self.db.update_fighter(fighter2_id, fighter_2_data)
-                elif fighter2 is None:
-                    print(f"Fighter with ID {fighter2_id} not found")
-                
-                # Create fight record
-                fight_record = {
-                    'id_event': event_id,
-                    'id_fighter_1': fighter1_id,
-                    'id_fighter_2': fighter2_id,
-                    'result_fighter_1': parse_result(fight.get('result_fighter_1')),
-                    'result_fighter_2': parse_result(fight.get('result_fighter_2')),
-                    'finish_by': fight.get('finish_by'),
-                    'fight_type': fight.get('fight_type'),
-                    'finish_by_details': fight.get('finish_by_details'),
-                    'rounds': fight.get('rounds'),
-                    'opponent_tapology_url': fight.get('url_fighter_2', ''),
-                    'minutes_per_round': fight.get('minutes_per_round', 5),
-                    'created_at': datetime.now(pytz.UTC).isoformat()
-                }
-                
-                print(f"EventUpdater: Creating fight: {fight_record}")
-                self.db.create_fight(fight_record)
-                
-            except Exception as e:
-                logger.error(f"Failed to create fight: {str(e)}")
-
-    async def _check_and_add_new_fights(self, event_data: List[Dict], event_id: int):
-        """Check for new fights added to an existing event card"""
-        try:
-            fight_cards = event_data[0].get("Fight Card", [])
-            existing_fights = self.db.get_fights_by_event_id(event_id)  # You'll need to implement this method
-            
-            # Create a set of existing fight pairs for quick lookup
-            existing_fight_pairs = set()
-            for fight in existing_fights:
-                # Create a tuple of fighter IDs (sorted to handle either order)
-                pair = tuple(sorted([fight['id_fighter_1'], fight['id_fighter_2']]))
-                existing_fight_pairs.add(pair)
-            
-            new_fights_added = 0
-            for fight in fight_cards:
-                # Get or create fighters
-                fighter1_id = await get_or_create_fighter(self, fight.get('url_fighter_1', ''), fight.get('fighter_1', ''))
-                fighter2_id = await get_or_create_fighter(self, fight.get('url_fighter_2', ''), fight.get('fighter_2', ''))
-                
-                if not fighter1_id or not fighter2_id:
-                    continue
-                
-                # Check if this fight already exists
-                fight_pair = tuple(sorted([fighter1_id, fighter2_id]))
-                if fight_pair not in existing_fight_pairs:
-                    # This is a new fight, add it
-                    fight_record = {
-                        'id_event': event_id,
-                        'id_fighter_1': fighter1_id,
-                        'id_fighter_2': fighter2_id,
-                        'result_fighter_1': fight.get('result_fighter_1'),
-                        'result_fighter_2': fight.get('result_fighter_2'),
-                        'finish_by': fight.get('finish_by'),
-                        'finish_by_details': fight.get('finish_by_details'),
-                        'fight_type': fight.get('fight_type'),
-                        'rounds': fight.get('rounds'),
-                        'minutes_per_round': fight.get('minutes_per_round', 5),
-                        'opponent_tapology_url': fight.get('url_fighter_2', ''),
-                        'created_at': datetime.now(pytz.UTC).isoformat()
-                    }
-
-                    print(f"EventUpdater: Check and Creating fight: {fight_record}")
-                    self.db.create_fight(fight_record)
-                    new_fights_added += 1
-                    logger.info(f"+ Added new fight: {fight.get('fighter_1')} vs {fight.get('fighter_2')}")
-            
-            if new_fights_added > 0:
-                logger.info(f"✅ Added {new_fights_added} new fights to existing event")
-                
-        except Exception as e:
-            logger.error(f"Failed to check for new fights: {str(e)}")
+    
 
     async def _get_all_event_urls(self) -> List[str]:
         """Get ALL event URLs from UFC, page by page without stopping"""

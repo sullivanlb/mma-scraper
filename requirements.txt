@@ -1,9 +1,0 @@
-Crawl4AI==0.4.248
-pydantic==2.11.2
-python-dotenv==1.1.0
-pytz==2025.1
-supabase==2.15.0
-tenacity==9.0.0
-pendulum
-fastapi
-uvicorn

@@ -6,6 +6,10 @@ from supabase import create_client, Client
 from typing import List, Dict, Optional
 from .utils import calculate_hash
 import logging
+from datetime import datetime, timedelta
+import pytz
+from datetime import datetime, timedelta
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -44,25 +48,9 @@ class Database:
     
     def update_fighter(self, fighter_id: int, data: Dict):
         """Update fighter data"""
-        fighter = self.get_fighter_by_id(fighter_id)
-        
-        if fighter is None:
-            print(f"Fighter with ID {fighter_id} not found")
-            return
-        
-        for key, value in data.items():
-            fighter[key] = value 
-
-        # Calculate hash of the updated fighter
-        fighter_hash = calculate_hash(fighter)
-        
-        # Add the hash to the update data
-        update_data = data.copy()
-        update_data['hash'] = fighter_hash
-
         try:
-            result = self.client.table('fighters').update(update_data).eq('id', fighter_id).execute()
-            # print(f"Update result: {result}")
+            # The hash should be pre-calculated and included in `data`
+            self.client.table('fighters').update(data).eq('id', fighter_id).execute()
         except Exception as e:
             print(f"Error updating fighter: {e}")
     
@@ -80,12 +68,29 @@ class Database:
         """Update fight data"""
         self.client.table('fights').update(data).eq('id', fight_id).execute()
     
-    def get_all_fighters_needing_update(self) -> List[Dict]:
-        """Get fighters that haven't been updated recently"""
-        # You can add logic here to check last_updated timestamp
-        result = self.client.table('fighters')\
-            .select('*')\
-            .execute()
+    def delete_fight(self, fight_id: int):
+        """Delete a fight by its ID."""
+        try:
+            self.client.table('fights').delete().eq('id', fight_id).execute()
+            logger.info(f"Deleted fight with ID: {fight_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete fight {fight_id}: {str(e)}")
+
+    def flag_fighter_for_update(self, fighter_id: int):
+        """Flag a fighter to be updated in the next run."""
+        self.update_fighter(fighter_id, {'needs_update': True})
+
+    def get_fighters_to_update(self, days_since_last_fight: int) -> List[Dict]:
+        """Get fighters who fought recently or are flagged for an update."""
+        # Calculate the cutoff date
+        cutoff_date = (datetime.now(pytz.UTC) - timedelta(days=days_since_last_fight)).isoformat()
+
+        # Build the `or` condition string
+        or_conditions = f"needs_update.eq.true,last_fight_date.gte.{cutoff_date}"
+
+        # Fetch fighters who either need a manual update or have fought recently
+        result = self.client.table('fighters').select('*').or_(or_conditions).execute()
+        
         return result.data
     
     def get_fight_by_fighters_and_event(self, id_fighter_1, id_fighter_2, id_event) -> List[Dict]:

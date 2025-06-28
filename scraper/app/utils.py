@@ -233,6 +233,7 @@ async def get_or_create_fighter(self, fighter_url: str, fighter_name: str) -> Op
     fighter_record = {
         'tapology_url': full_url,
         'name': fighter_name,
+        'needs_update': False,  # Set default
         'created_at': datetime.now(pytz.UTC).isoformat()
     }
     

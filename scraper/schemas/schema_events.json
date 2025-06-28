@@ -1,0 +1,60 @@
+{
+    "name": "Event Details",
+    "baseSelector": "#content",
+    "fields": [
+        { "name": "name", "selector": "#eventPageMobilePromotionIcon + h2", "type": "text"},
+        {
+        "name": "Header",
+            "selector": "#primaryDetailsContainer",
+            "type": "nested_list",
+            "fields": [
+                { "name": "datetime", "selector": "div:nth-child(2) ul span:-soup-contains(\"Date/Time:\") ~ span", "type": "text"},
+                { "name": "broadcast", "selector": "div:nth-child(2) ul span:-soup-contains(\"U.S. Broadcast:\") ~ span", "type": "text"},
+                { "name": "promotion", "selector": "div:nth-child(2) ul span:-soup-contains(\"Promotion:\") ~ span a", "type": "text"},
+                { "name": "venue", "selector": "div:nth-child(2) ul span:-soup-contains(\"Venue:\") ~ span", "type": "text"},
+                { "name": "location", "selector": "div:nth-child(2) ul span:-soup-contains(\"Location:\") ~ span a", "type": "text"},
+                { "name": "mma_bouts", "selector": "div:nth-child(2) ul span:-soup-contains(\"MMA Bouts:\") ~ span", "type": "text"},
+                { "name": "img_url", "selector": "div:first-child img", "type": "attribute", "attribute": "src"}
+
+            ]
+        },
+        {
+        "name": "Fight Card",
+            "selector": "#sectionFightCard > ul li",
+            "type": "nested_list",
+            "fields": [
+                { "name": "fight_type", "selector": "div.flex.flex-col.rounded.text-tap_darkgold span.uppercase.font-bold a", "type": "text"},
+                { 
+                    "name": "finish_by", 
+                    "selector": "div.w-full.md\\:w-\\[756px\\] span.uppercase.text-sm", 
+                    "type": "regex", 
+                    "pattern": "([^,]+),.*", 
+                    "group": 1,
+                    "transform": "strip"
+                },
+                { 
+                    "name": "finish_by_details", 
+                    "selector": "div.w-full.md\\:w-\\[756px\\] span.uppercase.text-sm", 
+                    "type": "regex", 
+                    "pattern": "[^,]+,(.*)", 
+                    "group": 1,
+                    "transform": "strip"
+                },
+                { "name": "rounds", "selector": "div.flex.flex-col.rounded.text-tap_darkgold div.text-xs11", "type": "regex", "pattern": "(\\d+) x \\d+", "group": 1},
+                { "name": "minutes_per_round", "selector": "div.flex.flex-col.rounded.text-tap_darkgold div.text-xs11", "type": "regex", "pattern": "\\d+ x (\\d+)", "group": 1},
+                { "name": "img_fighter_1", "selector": "[id^=\"fighterBoutImage\"]:nth-of-type(1) img", "type": "attribute", "attribute": "src"},
+                { "name": "name_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] a.link-primary-red", "type": "text"},
+                { "name": "title_fighter_1", "selector": "#fb0TitleMatchup", "type": "regex", "pattern": "(Champion|Challenger)", "transform": "strip", "default": null},
+                { "name": "result_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] div[class*=\"bg-\"] span", "type": "text"},
+                { "name": "url_fighter_1", "selector": "[id^=\"boutFullsize\"] [id$=\"leftBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"},
+                { "name": "img_fighter_2", "selector": "[id^=\"fighterBoutImage\"]:nth-of-type(2) img", "type": "attribute", "attribute": "src"},
+                { "name": "name_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "text"},
+                { "name": "title_fighter_2", "selector": "#fb1TitleMatchup", "type": "regex", "pattern": "(Champion|Challenger)", "transform": "strip", "default": null},
+                { "name": "result_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] div[class*=\"bg-\"] span", "type": "text"},
+                { "name": "url_fighter_2", "selector": "[id^=\"boutFullsize\"] [id$=\"rightBio\"] a.link-primary-red", "type": "attribute", "attribute": "href"},
+                { "name": "small_fighter_1_img_url", "selector": "div.flex.flex-col.w-\\[37\\%\\]:first-child img[alt]", "type": "attribute", "attribute": "src"},
+                { "name": "small_fighter_2_img_url", "selector": "div.flex.flex-col.w-\\[37\\%\\]:last-child img[alt]", "type": "attribute", "attribute": "src"}
+            ]
+        }
+    ]
+}
