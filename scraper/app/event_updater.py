@@ -93,6 +93,35 @@ class EventUpdater:
         
         # Sort by date to process in chronological order
         return event_urls
+
+    async def get_upcoming_event_urls(self) -> List[str]:
+        """Get URLs for all upcoming events."""
+        event_urls = []
+        page = 1
+        now = datetime.now(pytz.UTC)
+
+        logger.info("📅 Searching for all upcoming events...")
+
+        while True:
+            url = f"{self.config.ufc_url}?page={page}"
+            data = await self.scraper.extract_data(url, self.schema_events_urls)
+
+            if not data or not data[0]["URLs"]:
+                break
+
+            for event in data[0]["URLs"]:
+                event_date = parse_listing_date(event['date'])
+                if event_date and event_date >= now:
+                    event_urls.append(urljoin(self.config.base_url, event['url']))
+
+            # If the last event on the page is in the past, we can stop
+            last_event_date = parse_listing_date(data[0]["URLs"][-1]['date'])
+            if last_event_date and last_event_date < now:
+                break
+
+            page += 1
+
+        return event_urls
     
     async def _update_single_event(self, semaphore, event_url: str):
         """Update a single event if needed, create if doesn't exist"""

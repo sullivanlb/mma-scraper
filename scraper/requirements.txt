@@ -7,3 +7,4 @@ tenacity==9.0.0
 pendulum
 fastapi
 uvicorn
+requests
