@@ -37,14 +37,20 @@ async def is_event_live(scraper, config):
     now_utc = datetime.now(pytz.UTC)
     
     for event in data[0]["URLs"]:
+        print(f"Processing event: {event.get('date')}")
         event_date = parse_listing_date(event.get('date'))
+        print(f"Checking event: {event.get('url')} (Date: {event_date})")
         if not event_date:
             continue
 
-        # Check if the event is within our "live" window
-        time_difference = abs(now_utc - event_date)
-        if time_difference <= timedelta(hours=LIVE_WINDOW_HOURS):
-            print(f"Live event detected: {event.get('url')} (Starts at: {event_date})")
+        # Define the live window around the event date
+        start_live_window = event_date - timedelta(hours=LIVE_WINDOW_HOURS)
+        end_live_window = event_date + timedelta(hours=LIVE_WINDOW_HOURS)
+
+        # Check if current time is within the live window
+        # print(f"Live window: {start_live_window} to {end_live_window} (now: {now_utc})")
+        if start_live_window <= now_utc <= end_live_window:
+            print(f"Live event detected: {event.get('url')} (Starts at: {event_date}, Window: {start_live_window} to {end_live_window})")
             return True
             
     print("No live events found within the configured window.")

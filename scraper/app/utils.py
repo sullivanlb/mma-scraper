@@ -22,14 +22,15 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
     # Clean the input
     clean_date = re.sub(r'\s{2,}', ' ', date_str.strip())
     clean_date = re.sub(r'\s*,\s*', ', ', clean_date)
-    clean_date = re.sub(r'\s+ET$', '', clean_date, flags=re.IGNORECASE)
+    clean_date = re.sub(r'\s+ET\b', '', clean_date, flags=re.IGNORECASE)  # Fixed: remove ET anywhere, not just at end
     
     # Debug: print what we're trying to parse
-    # print(f"Attempting to parse: '{clean_date}'")
+    print(f"Original: '{date_str}' -> Cleaned: '{clean_date}'")
     
     try:
         # First, try to parse as-is with explicit timezone
         parsed = pendulum.parse(clean_date, tz='America/New_York')
+        print(f"Pendulum parsed successfully: {parsed} -> UTC: {parsed.in_timezone('UTC')}")
         return parsed.in_timezone('UTC')
         
     except Exception as e:
@@ -68,19 +69,20 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
 
 def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
     """Manual parsing fallback for common date patterns."""
-    # print(f"Attempting manual fallback for: '{date_str}'")
+    print(f"Attempting manual fallback for: '{date_str}'")
     
     # Enhanced patterns that capture time
     patterns = [
         r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',                                          # "January 18, 2025"
         r'(\d{4})\s+(\w+)\s+(\d{1,2})',                                           # "1999 May 04"
-        # FIXED: This pattern now captures the time portion
         r'(?:\w+\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+at\s+(\d{1,2}):(\d{2})\s+([AP]M))?',  # "Saturday 06.28.2025 at 06:30 PM"
         r'(?:\w+\s+)?(\w+)\s+(\d{1,2}),\s*(?:(\d{1,2})(?::(\d{2}))?([ap]m),\s*)?(\d{4})',     # "Sat Sep 13, 6pm, 2025"
         r'(\w+)\s+(\d{1,2}),\s*(?:(\d{1,2})(?::(\d{2}))?([ap]m),\s*)?(\d{4})',               # "Aug 16, 6pm, 2025" 
         r'(\d{1,2})/(\d{1,2})/(\d{4})',                                            # "1/18/2025"
         r'(\d{4})-(\d{1,2})-(\d{1,2})',                                            # "2025-01-18"
         r'(\w+)\s+(\d{1,2})',                                                      # "January 18" (no year)
+        r'(?:\w+,\s+)?(\w+)\s+(\d{1,2})\s+at\s+(\d{1,2}):(\d{2})\s+([AP]M)\s+UTC',  # "Sunday, June 29 at 11:00 PM UTC"
+        r'(?:\w+,\s+)?(\w+)\s+(\d{1,2}),\s+(\d{1,2}):(\d{2})\s+([AP]M)',         # "Saturday, June 28, 7:00 PM" (ET already stripped)
     ]
     
     # Comprehensive month mapping
@@ -100,7 +102,7 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
         if match:
             try:
                 groups = match.groups()
-                # print(f"Pattern matched: groups: {groups}")
+                print(f"Pattern {patterns.index(pattern)} matched: groups: {groups}")
                 
                 if pattern == patterns[0]:  # Month name format
                     month_name, day, year = groups
@@ -138,7 +140,6 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
                     
                     parsed = pendulum.datetime(int(year), int(month), int(day), 
                                              hour_24, minute_val, tz='America/New_York')
-                    # print(f"Manual parse successful with time: {parsed}")
                     return parsed.in_timezone('UTC')
                 
                 elif pattern == patterns[3] or pattern == patterns[4]:  # Month name with time
@@ -192,6 +193,48 @@ def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
                         if parsed < now.subtract(months=6):
                             parsed = pendulum.datetime(current_year + 1, month, int(day), tz='America/New_York')
                         
+                        return parsed.in_timezone('UTC')
+                
+                elif pattern == patterns[8]:  # "Sunday, June 29 at 11:00 PM UTC"
+                    month_name, day, hour, minute, ampm = groups
+                    month = month_map.get(month_name.lower())
+                    if month:
+                        hour_val = int(hour)
+                        minute_val = int(minute)
+                        
+                        # Convert to 24-hour format
+                        if ampm.upper() == 'PM' and hour_val != 12:
+                            hour_24 = hour_val + 12
+                        elif ampm.upper() == 'AM' and hour_val == 12:
+                            hour_24 = 0
+                        else:
+                            hour_24 = hour_val
+                        
+                        current_year = pendulum.now().year
+                        # Since this is already UTC, create directly in UTC
+                        parsed = pendulum.datetime(current_year, month, int(day),
+                                                 hour_24, minute_val, tz='UTC')
+                        return parsed
+                
+                elif pattern == patterns[9]:  # "Saturday, June 28, 7:00 PM" (ET stripped)
+                    month_name, day, hour, minute, ampm = groups
+                    month = month_map.get(month_name.lower())
+                    if month:
+                        hour_val = int(hour)
+                        minute_val = int(minute)
+                        
+                        # Convert to 24-hour format
+                        if ampm.upper() == 'PM' and hour_val != 12:
+                            hour_24 = hour_val + 12
+                        elif ampm.upper() == 'AM' and hour_val == 12:
+                            hour_24 = 0
+                        else:
+                            hour_24 = hour_val
+                        
+                        current_year = pendulum.now().year
+                        # This was ET (Eastern Time), so create in America/New_York timezone
+                        parsed = pendulum.datetime(current_year, month, int(day),
+                                                 hour_24, minute_val, tz='America/New_York')
                         return parsed.in_timezone('UTC')
                         
             except Exception as e:

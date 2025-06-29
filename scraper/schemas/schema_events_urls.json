@@ -8,7 +8,7 @@
             "type": "nested_list",
             "fields": [
                 { "name": "url", "selector": "a[href^=\"/fightcenter/events/\"]", "type": "attribute", "attribute": "href"},
-                { "name": "date", "selector": "span.inline.md\\:hidden:not(:has(a))", "type": "text"}
+                { "name": "date", "selector": "span.hidden.md\\:inline:not(:has(a))", "type": "text"}
             ]
         }
     ]

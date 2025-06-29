@@ -13,7 +13,7 @@ __pycache__/
 
 # Test files and folders
 test.py
-test/
+
 
 # Trash folder
 _trash/

@@ -19,8 +19,8 @@ class FighterUpdater:
         self.config = config
         self.db = database
         self.scraper = WebScraper(config)
-        self.schema_profiles = load_schema('./scraper/schemas/schema_profiles.json')
-        self.schema_events = load_schema('./scraper/schemas/schema_events.json')
+        self.schema_profiles = load_schema('./schemas/schema_profiles.json')
+        self.schema_events = load_schema('./schemas/schema_events.json')
     
     async def update_fighters(self):
         """Update fighters who have had recent fights or are flagged for an update."""
