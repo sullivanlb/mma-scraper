@@ -1,0 +1,30 @@
+name: Live Event Check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # Check for live events every 30 minutes
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  trigger_live_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        working-directory: ./scraper
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install
+
+      - name: Run trigger script
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }} # You need to add this secret to your repository
+        working-directory: ./scraper
+        run: python ./trigger_live_update.py
