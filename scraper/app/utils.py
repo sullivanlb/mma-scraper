@@ -56,7 +56,7 @@ def parse_listing_date(date_str: str) -> Optional[datetime]:
 
 def _manual_parse_fallback(date_str: str) -> Optional[datetime]:
     """Manual parsing fallback for common date patterns."""
-    print(f"Attempting manual fallback for: '{date_str}'")
+    # print(f"Attempting manual fallback for: '{date_str}'")
 
     patterns = [
         r'(?:\w+,\s+)?(\w+)\s+(\d{1,2})\s+at\s+(\d{1,2}):(\d{2})\s+([AP]M)',         # "June 28 at 7:00 PM"

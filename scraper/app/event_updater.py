@@ -22,9 +22,9 @@ class EventUpdater:
         self.config = config
         self.db = database
         self.scraper = WebScraper(config)
-        self.schema_events_urls = load_schema('./schemas/schema_events_urls.json')
-        self.schema_events = load_schema('./schemas/schema_events.json')
-        self.schema_profiles = load_schema('./schemas/schema_profiles.json')  # or whatever the correct path is
+        self.schema_events_urls = load_schema('./scraper/schemas/schema_events_urls.json')
+        self.schema_events = load_schema('./scraper/schemas/schema_events.json')
+        self.schema_profiles = load_schema('./scraper/schemas/schema_profiles.json')  # or whatever the correct path is
     
     async def update_recent_events(self):
         """Update events from the last N days and next N days"""
@@ -212,6 +212,9 @@ class EventUpdater:
                 self.db.delete_fight(fight_to_delete['id'])
                 logger.info(f"- Removed fight: {fight_to_delete['id']}")
 
+        print("DEBOG")
+        logger.info(scraped_fights)
+
         # 2. Fights to ADD or UPDATE
         for fight_data in scraped_fights:
             fighter1_id = await get_or_create_fighter(self, fight_data.get('url_fighter_1'), fight_data.get('name_fighter_1'))
@@ -248,6 +251,11 @@ class EventUpdater:
                 })
                 self.db.create_fight(update_data)
                 logger.info(f"+ Added new fight between {fighter1_id} and {fighter2_id}")
+
+    async def update_event_by_url(self, event_url: str):
+        """Update a single event given its URL."""
+        semaphore = asyncio.Semaphore(1)  # Semaphore with a limit of 1 for a single update
+        await self._update_single_event(semaphore, event_url)
 
     async def _create_new_event(self, event_url: str, event_data: List[Dict], hash_value: str) -> Optional[int]:
         """Create a new event in the database"""
