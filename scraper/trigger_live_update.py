@@ -24,7 +24,7 @@ LIVE_WINDOW_HOURS = 4
 
 async def is_event_live(scraper, config):
     """Checks if a UFC event is currently within the live window."""
-    schema_events_urls = load_schema('./scraper/schemas/schema_events_urls.json')
+    schema_events_urls = load_schema('./schemas/schema_events_urls.json')
     
     # Check the first page of UFC events on Tapology
     url = config.ufc_url
@@ -85,7 +85,6 @@ async def main():
         trigger_github_action()
 
 if __name__ == "__main__":
-    # IMPORTANT: Replace with your actual GitHub username
     if GITHUB_USER == "YOUR_GITHUB_USERNAME":
         print("Please update the GITHUB_USER variable in trigger_live_update.py before running.")
     else:

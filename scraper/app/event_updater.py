@@ -22,9 +22,9 @@ class EventUpdater:
         self.config = config
         self.db = database
         self.scraper = WebScraper(config)
-        self.schema_events_urls = load_schema('./scraper/schemas/schema_events_urls.json')
-        self.schema_events = load_schema('./scraper/schemas/schema_events.json')
-        self.schema_profiles = load_schema('./scraper/schemas/schema_profiles.json')  # or whatever the correct path is
+        self.schema_events_urls = load_schema('./schemas/schema_events_urls.json')
+        self.schema_events = load_schema('./schemas/schema_events.json')
+        self.schema_profiles = load_schema('./schemas/schema_profiles.json')  # or whatever the correct path is
     
     async def update_recent_events(self):
         """Update events from the last N days and next N days"""
