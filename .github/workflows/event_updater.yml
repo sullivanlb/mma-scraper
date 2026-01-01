@@ -17,18 +17,16 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        working-directory: ./scraper
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          playwright install
 
-      - name: Run periodic update script
+      - name: Run Scrapy event spider (recent events)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        working-directory: ./scraper
-        run: python ./update_periodic.py
+        working-directory: ./mma_scrapy
+        run: scrapy crawl events -a mode=recent -a days_offset=7
 
   live_event_scrape:
     if: github.event.action == 'run-live-update'
@@ -42,14 +40,13 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        working-directory: ./scraper
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run live update script
+      - name: Run Scrapy event spider (upcoming events)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        working-directory: ./scraper
-        run: python ./update_live.py
+        working-directory: ./mma_scrapy
+        run: scrapy crawl events -a mode=upcoming
